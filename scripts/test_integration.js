@@ -42,7 +42,7 @@ assert.ok(!cleanedJs.includes('Duplica o valor'), 'Comentário de linha removido
 assert.ok(cleanedJs.includes('return x * 2;'), 'Código funcional preservado');
 
 const ruleResult = ensureAiDirectiveRule(tempDir);
-assert.strictEqual(ruleResult.status, 'created', 'GEMINI.md deve ser criado');
+assert.ok(ruleResult.configured.some(r => r.file.includes('GEMINI.md') && r.status === 'created'), 'GEMINI.md deve ser criado');
 assert.ok(fs.existsSync(path.join(tempDir, 'GEMINI.md')), 'Arquivo GEMINI.md existe');
 
 // Teste de instalação de Pre-Commit Hook

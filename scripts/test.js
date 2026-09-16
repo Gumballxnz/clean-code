@@ -77,20 +77,31 @@ assert.ok(!yamlResult.cleaned.includes('Configuração geral'), 'Comentário de 
 assert.ok(!yamlResult.cleaned.includes('porta principal'), 'Comentário inline YAML removido');
 console.log('✓ 6. Teste YAML / Config passou!');
 
-// 7. Teste Gerador Multi-IA
+// 7. Teste Gerador Multi-IA e Codex
 const tempDir = path.join(__dirname, '..', 'temp_multi_ai_test');
 if (fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true, force: true });
 fs.mkdirSync(tempDir, { recursive: true });
 
 const multiAiResults = generateAllAiRules(tempDir);
-assert.strictEqual(multiAiResults.length, 6, 'Deve gerar 6 arquivos de regras de IA');
+assert.ok(multiAiResults.length >= 8, 'Deve gerar arquivos de regras para 8+ IAs');
 assert.ok(fs.existsSync(path.join(tempDir, 'GEMINI.md')), 'GEMINI.md gerado');
 assert.ok(fs.existsSync(path.join(tempDir, '.cursorrules')), '.cursorrules gerado');
 assert.ok(fs.existsSync(path.join(tempDir, '.cursor', 'rules', 'clean-code.mdc')), '.cursor/rules/clean-code.mdc gerado');
 assert.ok(fs.existsSync(path.join(tempDir, '.windsurfrules')), '.windsurfrules gerado');
 assert.ok(fs.existsSync(path.join(tempDir, '.github', 'copilot-instructions.md')), 'copilot-instructions.md gerado');
 assert.ok(fs.existsSync(path.join(tempDir, 'CLAUDE.md')), 'CLAUDE.md gerado');
+assert.ok(fs.existsSync(path.join(tempDir, 'CODEX.md')), 'CODEX.md gerado');
+assert.ok(fs.existsSync(path.join(tempDir, '.clinerules')), '.clinerules gerado');
 fs.rmSync(tempDir, { recursive: true, force: true });
-console.log('✓ 7. Teste Gerador Multi-IA passou!');
+console.log('✓ 7. Teste Gerador Multi-IA (com Codex) passou!');
 
-console.log('--- Todos os testes da v1.1.0 passaram com 100% de sucesso! ---');
+// 8. Teste de Auto-Detecção de IA/IDE em Tempo de Execução
+const { detectActiveAiEnvironments } = require('../templates/MULTI_AI_RULES');
+const simulatedEnv = { CURSOR_VERSION: '0.42.0', ANTHROPIC_API_KEY: 'sk-ant-test' };
+const detected = detectActiveAiEnvironments(process.cwd(), simulatedEnv);
+const detectedIds = detected.map(d => d.id);
+assert.ok(detectedIds.includes('cursor'), 'Cursor deve ser detectado via variável de ambiente');
+assert.ok(detectedIds.includes('claude'), 'Claude deve ser detectado via variável de ambiente');
+console.log('✓ 8. Teste de Auto-Detecção de IA/IDE passou!');
+
+console.log('--- Todos os testes da v1.2.0 passaram com 100% de sucesso! ---');

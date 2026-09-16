@@ -13,7 +13,7 @@ const {
   stripCommentsFromConfig
 } = require('./parsers');
 
-const { generateAllAiRules } = require('../templates/MULTI_AI_RULES');
+const { generateAllAiRules, syncAiRules } = require('../templates/MULTI_AI_RULES');
 
 const DEFAULT_IGNORED_DIRS = new Set([
   'node_modules',
@@ -332,34 +332,13 @@ function processDirectory(targetDir, options, ignoredDirs, stats = {
 }
 
 function ensureAiDirectiveRule(targetDir, allRules = false) {
-  if (allRules) {
-    return { type: 'multi', results: generateAllAiRules(targetDir) };
-  }
-
-  const geminiMdPath = path.join(targetDir, 'GEMINI.md');
-  const templatePath = path.join(__dirname, '..', 'templates', 'GEMINI_RULE.md');
-  let ruleTemplate = '';
-
-  if (fs.existsSync(templatePath)) {
-    ruleTemplate = fs.readFileSync(templatePath, 'utf8');
-  } else {
-    ruleTemplate = `# Clean Code Directive\n\n- Write pure, self-documenting code.\n- Do NOT add unnecessary, redundant, or explanatory comments inside code files.\n- Preserve only critical compiler/linter directives.\n`;
-  }
-
   try {
-    if (!fs.existsSync(geminiMdPath)) {
-      fs.writeFileSync(geminiMdPath, ruleTemplate, 'utf8');
-      return { type: 'single', status: 'created', file: 'GEMINI.md' };
-    } else {
-      const existing = fs.readFileSync(geminiMdPath, 'utf8');
-      if (!existing.includes('Clean Code Directive') && !existing.includes('clean-code')) {
-        fs.appendFileSync(geminiMdPath, '\n\n' + ruleTemplate, 'utf8');
-        return { type: 'single', status: 'updated', file: 'GEMINI.md' };
-      }
-      return { type: 'single', status: 'already_present', file: 'GEMINI.md' };
-    }
+    return syncAiRules(targetDir, { allRules });
   } catch (err) {
-    return { type: 'single', status: 'error', error: err.message };
+    return {
+      detected: [],
+      configured: [{ status: 'error', file: 'GEMINI.md', error: err.message }]
+    };
   }
 }
 
@@ -389,26 +368,24 @@ function printDetailedReport(stats, options, durationMs, ruleResult) {
     console.log('\nNenhum arquivo necessitou de limpeza. Todo o código já está puro!');
   }
 
-  if (ruleResult) {
+  if (ruleResult && ruleResult.configured) {
     console.log('\n----------------------------------------------------------------');
     console.log('DIRETRIZES PERSISTENTES PARA IA:');
-    if (ruleResult.type === 'multi') {
-      ruleResult.results.forEach(res => {
-        if (res.status === 'created' || res.status === 'updated') {
-          console.log(` ✓ Arquivo ${res.file} configurado com sucesso.`);
-        } else if (res.status === 'already_present') {
-          console.log(` ✓ Diretriz já presente em ${res.file}.`);
-        }
-      });
-    } else {
-      if (ruleResult.status === 'created') {
-        console.log(` ✓ Arquivo ${ruleResult.file} criado com sucesso! As IAs não comentarão mais este projeto.`);
-      } else if (ruleResult.status === 'updated') {
-        console.log(` ✓ Diretriz anexada ao ${ruleResult.file} existente com sucesso.`);
-      } else if (ruleResult.status === 'already_present') {
-        console.log(` ✓ Diretriz de Clean Code já estava ativa no ${ruleResult.file}.`);
-      }
+    if (ruleResult.detected && ruleResult.detected.length > 0) {
+      console.log(` • Ambientes de IA detectados: ${ruleResult.detected.join(', ')}`);
     }
+    ruleResult.configured.forEach(res => {
+      const tag = res.providerName ? `[${res.providerName}]` : '';
+      if (res.status === 'created') {
+        console.log(` ✓ ${tag} Arquivo ${res.file} criado com sucesso!`);
+      } else if (res.status === 'updated') {
+        console.log(` ✓ ${tag} Diretriz anexada ao ${res.file} com sucesso.`);
+      } else if (res.status === 'already_present') {
+        console.log(` ✓ ${tag} Diretriz já ativa em ${res.file}.`);
+      } else if (res.status === 'error') {
+        console.log(` ! Falha ao configurar ${res.file}: ${res.error}`);
+      }
+    });
   }
 
   if (stats.errors.length > 0) {
