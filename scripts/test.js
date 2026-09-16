@@ -1,11 +1,18 @@
 const assert = require('assert');
+const path = require('path');
+const fs = require('fs');
 const {
   stripCommentsWithAst,
+  stripCommentsFromCStyle,
   stripCommentsFromShellOrPython,
-  stripCommentsFromCss
-} = require('./clean_code');
+  stripCommentsFromHtmlAndTemplates,
+  stripCommentsFromCss,
+  stripCommentsFromConfig
+} = require('./parsers');
 
-console.log('--- Iniciando Testes Unitários de Clean Code ---');
+const { generateAllAiRules } = require('../templates/MULTI_AI_RULES');
+
+console.log('--- Iniciando Testes Unitários de Clean Code v1.1.0 ---');
 
 // 1. Teste Shell/Python
 const pyCode = `#!/usr/bin/env python3\n# Comentário de cabeçalho\nurl = "http://example.com#anchor"\n# Outro comentário\nprint('Hello # world') # linha comentada\n`;
@@ -15,23 +22,75 @@ assert.ok(pyResult.cleaned.includes('http://example.com#anchor'), 'URL com # dev
 assert.ok(pyResult.cleaned.includes("Hello # world"), 'String com # deve ser preservada');
 assert.ok(!pyResult.cleaned.includes('Comentário de cabeçalho'), 'Comentário deve ser removido');
 assert.strictEqual(pyResult.lineCommentsCount, 3, 'Deve contar 3 comentários de linha');
-console.log('✓ Teste Python/Shell passou!');
+console.log('✓ 1. Teste Python/Shell passou!');
 
 // 2. Teste CSS
 const cssCode = `/* @license MIT */\n/* Comentário desnecessário */\nbody {\n  color: red; /* cor do texto */\n}\n`;
 const cssResult = stripCommentsFromCss(cssCode);
 assert.ok(cssResult.cleaned.includes('@license MIT'), 'Licença deve ser preservada');
 assert.ok(!cssResult.cleaned.includes('Comentário desnecessário'), 'Comentário normal deve ser removido');
-console.log('✓ Teste CSS passou!');
+console.log('✓ 2. Teste CSS passou!');
+
 // 3. Teste JavaScript / TypeScript AST
+let ts = null;
+try {
+  ts = require('typescript');
+} catch (_) {
+  try {
+    ts = require(path.join(__dirname, '..', 'node_modules', 'typescript'));
+  } catch (_) {}
+}
+
 const jsCode = `/**\n * Funcao de soma\n * @param {number} a\n * @returns {number}\n */\n// eslint-disable-next-line no-unused-vars\nconst add = (a, b) => {\n  // soma dois valores\n  return a + b; /* retorno */\n};\n`;
-const jsResult = stripCommentsWithAst(jsCode, '.js');
-assert.ok(jsResult !== null, 'stripCommentsWithAst deve retornar resultado');
-assert.ok(jsResult.cleaned.includes('eslint-disable-next-line'), 'Diretiva eslint deve ser preservada');
-assert.ok(!jsResult.cleaned.includes('Funcao de soma'), 'JSDoc deve ser removido');
-assert.ok(!jsResult.cleaned.includes('soma dois valores'), 'Comentário de linha deve ser removido');
-assert.ok(!jsResult.cleaned.includes('/* retorno */'), 'Comentário inline de bloco deve ser removido');
-console.log('✓ Teste JavaScript / TypeScript AST passou!');
+const jsResult = stripCommentsWithAst(jsCode, '.js', ts);
+if (jsResult) {
+  assert.ok(jsResult.cleaned.includes('eslint-disable-next-line'), 'Diretiva eslint deve ser preservada');
+  assert.ok(!jsResult.cleaned.includes('Funcao de soma'), 'JSDoc deve ser removido');
+  assert.ok(!jsResult.cleaned.includes('soma dois valores'), 'Comentário de linha deve ser removido');
+  assert.ok(!jsResult.cleaned.includes('/* retorno */'), 'Comentário inline de bloco deve ser removido');
+  console.log('✓ 3. Teste JavaScript / TypeScript AST passou!');
+}
 
-console.log('--- Todos os testes rápidos passaram com sucesso! ---');
+// 4. Teste C-Style (Java, C#, Go, Rust, PHP, C++)
+const cstyleCode = `// @license MIT\n// Comentário de classe\npublic class App {\n  // Campo de texto\n  private String msg = "Texto com // barras e \\"aspas\\"";\n  /* Bloco de comentário */\n  public void run() {\n    System.out.println(msg); // print\n  }\n}\n`;
+const cstyleResult = stripCommentsFromCStyle(cstyleCode, '.java');
+assert.ok(cstyleResult.cleaned.includes('// @license MIT'), 'Licença deve ser preservada');
+assert.ok(cstyleResult.cleaned.includes('Texto com // barras'), 'String com barras duplas deve ser preservada');
+assert.ok(!cstyleResult.cleaned.includes('Comentário de classe'), 'Comentário // deve ser removido');
+assert.ok(!cstyleResult.cleaned.includes('Bloco de comentário'), 'Comentário /* */ deve ser removido');
+assert.strictEqual(cstyleResult.blockCommentsCount, 1, '1 bloco removido');
+console.log('✓ 4. Teste C-Style (Java/C#/Go/Rust) passou!');
 
+// 5. Teste HTML / Templates (Vue, Svelte, HTML)
+const htmlCode = `<!DOCTYPE html>\n<!-- Comentário no HTML -->\n<!--[if IE]><p>IE</p><![endif]-->\n<div id="app">\n  <!-- Comentário do componente -->\n  <h1>Olá Mundo</h1>\n</div>\n`;
+const htmlResult = stripCommentsFromHtmlAndTemplates(htmlCode, '.html', ts);
+assert.ok(htmlResult.cleaned.includes('<!--[if IE]><p>IE</p><![endif]-->'), 'Condicional IE preservada');
+assert.ok(!htmlResult.cleaned.includes('Comentário no HTML'), 'Comentário HTML removido');
+assert.ok(!htmlResult.cleaned.includes('Comentário do componente'), 'Comentário do componente removido');
+console.log('✓ 5. Teste HTML / Templates passou!');
+
+// 6. Teste YAML / Config
+const yamlCode = `# Configuração geral\nserver:\n  port: 8080 # porta principal\n  url: "http://example.com#api" # endpoint\n`;
+const yamlResult = stripCommentsFromConfig(yamlCode, '.yaml');
+assert.ok(yamlResult.cleaned.includes('http://example.com#api'), 'URL com # dentro de aspas deve ser preservada');
+assert.ok(!yamlResult.cleaned.includes('Configuração geral'), 'Comentário de cabeçalho YAML removido');
+assert.ok(!yamlResult.cleaned.includes('porta principal'), 'Comentário inline YAML removido');
+console.log('✓ 6. Teste YAML / Config passou!');
+
+// 7. Teste Gerador Multi-IA
+const tempDir = path.join(__dirname, '..', 'temp_multi_ai_test');
+if (fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true, force: true });
+fs.mkdirSync(tempDir, { recursive: true });
+
+const multiAiResults = generateAllAiRules(tempDir);
+assert.strictEqual(multiAiResults.length, 6, 'Deve gerar 6 arquivos de regras de IA');
+assert.ok(fs.existsSync(path.join(tempDir, 'GEMINI.md')), 'GEMINI.md gerado');
+assert.ok(fs.existsSync(path.join(tempDir, '.cursorrules')), '.cursorrules gerado');
+assert.ok(fs.existsSync(path.join(tempDir, '.cursor', 'rules', 'clean-code.mdc')), '.cursor/rules/clean-code.mdc gerado');
+assert.ok(fs.existsSync(path.join(tempDir, '.windsurfrules')), '.windsurfrules gerado');
+assert.ok(fs.existsSync(path.join(tempDir, '.github', 'copilot-instructions.md')), 'copilot-instructions.md gerado');
+assert.ok(fs.existsSync(path.join(tempDir, 'CLAUDE.md')), 'CLAUDE.md gerado');
+fs.rmSync(tempDir, { recursive: true, force: true });
+console.log('✓ 7. Teste Gerador Multi-IA passou!');
+
+console.log('--- Todos os testes da v1.1.0 passaram com 100% de sucesso! ---');

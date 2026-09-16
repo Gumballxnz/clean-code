@@ -4,11 +4,23 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
+const {
+  stripCommentsWithAst,
+  stripCommentsFromCStyle,
+  stripCommentsFromShellOrPython,
+  stripCommentsFromHtmlAndTemplates,
+  stripCommentsFromCss,
+  stripCommentsFromConfig
+} = require('./parsers');
+
+const { generateAllAiRules } = require('../templates/MULTI_AI_RULES');
+
 const DEFAULT_IGNORED_DIRS = new Set([
   'node_modules',
   '.git',
   '.agents',
   '.gemini',
+  '.cursor',
   'dist',
   'build',
   '.next',
@@ -24,12 +36,18 @@ const DEFAULT_IGNORED_DIRS = new Set([
   '__pycache__',
   'out',
   '.vscode',
-  '.idea'
+  '.idea',
+  'target',
+  'bin',
+  'obj'
 ]);
 
 const JS_EXTS = new Set(['.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx']);
+const CSTYLE_EXTS = new Set(['.java', '.cs', '.php', '.cpp', '.c', '.h', '.hpp', '.go', '.rs', '.kt']);
+const TEMPLATE_EXTS = new Set(['.html', '.htm', '.vue', '.svelte', '.astro']);
 const SHELL_PYTHON_EXTS = new Set(['.sh', '.bash', '.py']);
 const CSS_EXTS = new Set(['.css', '.scss', '.less']);
+const CONFIG_EXTS = new Set(['.yaml', '.yml', '.toml', '.jsonc']);
 
 let ts = null;
 function resolveTypeScript(targetDir) {
@@ -53,14 +71,27 @@ function parseCliArgs() {
   const options = {
     targetDir: process.cwd(),
     enforceRule: true,
+    allRules: false,
     dryRun: false,
     verbose: false,
+    update: false,
+    setupHook: false,
+    stagedOnly: false,
     customIgnores: new Set()
   };
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (arg === '--no-rule') {
+    if (arg === '--update') {
+      options.update = true;
+    } else if (arg === '--hook' || arg === '--setup-hook') {
+      options.setupHook = true;
+    } else if (arg === '--staged') {
+      options.stagedOnly = true;
+    } else if (arg === '--all-rules') {
+      options.allRules = true;
+      options.enforceRule = true;
+    } else if (arg === '--no-rule') {
       options.enforceRule = false;
     } else if (arg === '--rule' || arg === '--enforce-rule') {
       options.enforceRule = true;
@@ -76,6 +107,100 @@ function parseCliArgs() {
   }
 
   return options;
+}
+
+function handleUpdate() {
+  console.log('\n================================================================');
+  console.log('            ATUALIZAÇÃO AUTOMÁTICA - CLEAN CODE SKILL           ');
+  console.log('================================================================');
+
+  const rootSkillDir = path.resolve(__dirname, '..');
+  const gitDir = path.join(rootSkillDir, '.git');
+
+  if (fs.existsSync(gitDir)) {
+    console.log(`Detectado repositório Git em: ${rootSkillDir}`);
+    console.log('Executando "git pull origin main"...');
+    try {
+      const gitPull = execSync('git pull origin main', { cwd: rootSkillDir, stdio: 'pipe' }).toString();
+      console.log(gitPull.trim());
+      console.log('Atualizando dependências...');
+      execSync('npm install --omit=dev --silent', { cwd: rootSkillDir, stdio: 'inherit' });
+      console.log('\n[OK] Clean Code atualizado com sucesso via Git!');
+    } catch (err) {
+      console.error('Falha ao atualizar via Git:', err.message);
+    }
+  } else {
+    console.log(`Atualizando instalação autônoma em: ${rootSkillDir}`);
+    try {
+      const tarUrl = 'https://github.com/Gumballxnz/clean-code/archive/refs/heads/main.tar.gz';
+      const tempArchive = path.join(rootSkillDir, 'update_temp.tar.gz');
+      execSync(`curl -fsSL "${tarUrl}" -o "${tempArchive}"`, { stdio: 'pipe' });
+      execSync(`tar -xz -f "${tempArchive}" --strip-components=1 -C "${rootSkillDir}"`, { stdio: 'pipe' });
+      if (fs.existsSync(tempArchive)) fs.unlinkSync(tempArchive);
+      execSync('npm install --omit=dev --silent', { cwd: rootSkillDir, stdio: 'inherit' });
+      console.log('\n[OK] Clean Code atualizado com sucesso com a versão mais recente do GitHub!');
+    } catch (err) {
+      console.error('Falha ao baixar atualização:', err.message);
+      console.log('Você pode executar o instalador de 1 linha novamente para forçar a atualização.');
+    }
+  }
+  console.log('================================================================\n');
+}
+
+function handleSetupHook(targetDir) {
+  console.log('\n================================================================');
+  console.log('          INSTALAÇÃO DO GIT PRE-COMMIT HOOK AUTOMÁTICO          ');
+  console.log('================================================================');
+
+  const gitDir = path.join(targetDir, '.git');
+  if (!fs.existsSync(gitDir)) {
+    console.error(`Erro: ${targetDir} não é um repositório Git (.git não encontrado).`);
+    console.log('Execute "git init" antes de configurar o hook.');
+    console.log('================================================================\n');
+    return false;
+  }
+
+  const hooksDir = path.join(gitDir, 'hooks');
+  if (!fs.existsSync(hooksDir)) {
+    fs.mkdirSync(hooksDir, { recursive: true });
+  }
+
+  const preCommitHookPath = path.join(hooksDir, 'pre-commit');
+  const cleanCodeScriptPath = path.resolve(__dirname, 'clean_code.js');
+
+  const hookScriptContent = `#!/bin/sh
+# Clean Code pre-commit hook
+echo "🧹 Executando Clean Code nos arquivos staged..."
+node "${cleanCodeScriptPath.replace(/\\/g, '/')}" --staged "${targetDir.replace(/\\/g, '/')}"
+`;
+
+  try {
+    fs.writeFileSync(preCommitHookPath, hookScriptContent, { mode: 0o755 });
+    console.log(`✓ Hook pre-commit criado com sucesso em: ${preCommitHookPath}`);
+    console.log('A partir de agora, qualquer "git commit" executará a faxina automaticamente nos arquivos modificados!');
+    console.log('================================================================\n');
+    return true;
+  } catch (err) {
+    console.error(`Falha ao criar hook: ${err.message}`);
+    console.log('================================================================\n');
+    return false;
+  }
+}
+
+function getStagedFiles(targetDir) {
+  try {
+    const output = execSync('git diff --cached --name-only --diff-filter=ACM', {
+      cwd: targetDir,
+      stdio: 'pipe'
+    }).toString();
+    return output
+      .split('\n')
+      .map(f => f.trim())
+      .filter(Boolean)
+      .map(f => path.join(targetDir, f));
+  } catch (_) {
+    return [];
+  }
 }
 
 function loadCleanIgnore(targetDir) {
@@ -95,180 +220,82 @@ function loadCleanIgnore(targetDir) {
   return ignores;
 }
 
-function stripCommentsWithAst(code, ext) {
-  if (!ts) ts = resolveTypeScript(process.cwd());
-  if (!ts) return null;
-  const isJsx = ext === '.tsx' || ext === '.jsx';
-  const scriptKind = ext === '.tsx' ? ts.ScriptKind.TSX :
-                     ext === '.jsx' ? ts.ScriptKind.JSX :
-                     ext === '.ts'  ? ts.ScriptKind.TS : ts.ScriptKind.JS;
+function cleanSingleFile(fullPath, options, stats) {
+  const ext = path.extname(fullPath).toLowerCase();
+  const isJs = JS_EXTS.has(ext);
+  const isCStyle = CSTYLE_EXTS.has(ext);
+  const isTemplate = TEMPLATE_EXTS.has(ext);
+  const isShellOrPy = SHELL_PYTHON_EXTS.has(ext);
+  const isCss = CSS_EXTS.has(ext);
+  const isConfig = CONFIG_EXTS.has(ext);
 
-  const sf = ts.createSourceFile('file' + ext, code, ts.ScriptTarget.Latest, true, scriptKind);
-  const comments = [];
-
-  function visit(node) {
-    const leading = ts.getLeadingCommentRanges(code, node.getFullStart()) || [];
-    const trailing = ts.getTrailingCommentRanges(code, node.getEnd()) || [];
-    for (const c of [...leading, ...trailing]) comments.push(c);
-    ts.forEachChild(node, visit);
-  }
-  visit(sf);
-
-  const unique = Array.from(new Map(comments.map(c => [c.pos, c])).values());
-  unique.sort((a, b) => b.pos - a.pos);
-
-  let result = code;
-  let blockCommentsCount = 0;
-  let lineCommentsCount = 0;
-
-  for (const c of unique) {
-    const commentText = code.slice(c.pos, c.end);
-    if (
-      commentText.includes('eslint-disable') ||
-      commentText.includes('prettier-ignore') ||
-      commentText.includes('@license') ||
-      commentText.includes('@ts-expect-error') ||
-      commentText.includes('@ts-ignore') ||
-      commentText.includes('istanbul ignore')
-    ) {
-      continue;
-    }
-
-    if (c.kind === ts.SyntaxKind.MultiLineCommentTrivia) {
-      blockCommentsCount++;
-    } else {
-      lineCommentsCount++;
-    }
-
-    result = result.slice(0, c.pos) + result.slice(c.end);
+  if (!isJs && !isCStyle && !isTemplate && !isShellOrPy && !isCss && !isConfig) {
+    return;
   }
 
-  const cleaned = result
-    .split('\n')
-    .map(line => line.replace(/\s+$/, ''))
-    .join('\n')
-    .replace(/^\s*\{\s*\}\s*$\n/gm, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim() + '\n';
+  stats.scannedFiles++;
 
-  return {
-    cleaned,
-    blockCommentsCount,
-    lineCommentsCount
-  };
-}
+  try {
+    const original = fs.readFileSync(fullPath, 'utf8');
+    const origLines = original.split('\n').length;
+    let result = null;
 
-function stripCommentsFromShellOrPython(content) {
-  let result = '';
-  let i = 0;
-  const len = content.length;
-
-  let inSingleQuote = false;
-  let inDoubleQuote = false;
-  let inComment = false;
-  let commentsRemoved = 0;
-
-  if (content.startsWith('#!')) {
-    const firstLineEnd = content.indexOf('\n');
-    if (firstLineEnd !== -1) {
-      result += content.slice(0, firstLineEnd + 1);
-      i = firstLineEnd + 1;
+    if (isJs) {
+      if (!ts) ts = resolveTypeScript(options.targetDir);
+      result = stripCommentsWithAst(original, ext, ts);
+    } else if (isCStyle) {
+      result = stripCommentsFromCStyle(original, ext);
+    } else if (isTemplate) {
+      result = stripCommentsFromHtmlAndTemplates(original, ext, ts);
+    } else if (isShellOrPy) {
+      result = stripCommentsFromShellOrPython(original);
+    } else if (isCss) {
+      result = stripCommentsFromCss(original);
+    } else if (isConfig) {
+      result = stripCommentsFromConfig(original, ext);
     }
-  }
 
-  while (i < len) {
-    const ch = content[i];
+    if (result && result.cleaned !== original) {
+      const linesDiff = Math.max(0, origLines - result.cleaned.split('\n').length);
 
-    if (inComment) {
-      if (ch === '\n') {
-        inComment = false;
-        result += ch;
+      if (!options.dryRun) {
+        fs.writeFileSync(fullPath, result.cleaned, 'utf8');
+
+        if (isJs && ext !== '.ts' && ext !== '.tsx' && ext !== '.jsx') {
+          try {
+            execSync(`node -c "${fullPath}"`, { stdio: 'pipe' });
+          } catch (syntaxErr) {
+            fs.writeFileSync(fullPath, original, 'utf8');
+            stats.errors.push(`Sintaxe inválida detectada e revertida em ${path.relative(options.targetDir, fullPath)}: ${syntaxErr.message}`);
+            return;
+          }
+        }
+
+        if (options.stagedOnly) {
+          try {
+            execSync(`git add "${fullPath}"`, { cwd: options.targetDir, stdio: 'pipe' });
+          } catch (_) {}
+        }
       }
-      i++;
-      continue;
-    }
 
-    if (inSingleQuote) {
-      result += ch;
-      if (ch === '\\' && i + 1 < len) {
-        result += content[i + 1];
-        i += 2;
-        continue;
-      }
-      if (ch === '\'') inSingleQuote = false;
-      i++;
-      continue;
-    }
+      stats.filesCleaned++;
+      stats.linesRemoved += linesDiff;
+      stats.totalBlockComments += result.blockCommentsCount;
+      stats.totalLineComments += result.lineCommentsCount;
 
-    if (inDoubleQuote) {
-      result += ch;
-      if (ch === '\\' && i + 1 < len) {
-        result += content[i + 1];
-        i += 2;
-        continue;
-      }
-      if (ch === '"') inDoubleQuote = false;
-      i++;
-      continue;
+      stats.cleanedDetails.push({
+        filePath: path.relative(options.targetDir, fullPath) || path.basename(fullPath),
+        originalLines: origLines,
+        newLines: result.cleaned.split('\n').length,
+        linesRemoved: linesDiff,
+        reductionPercent: origLines > 0 ? ((linesDiff / origLines) * 100).toFixed(1) : 0,
+        blockComments: result.blockCommentsCount,
+        lineComments: result.lineCommentsCount
+      });
     }
-
-    if (ch === '\'') {
-      inSingleQuote = true;
-      result += ch;
-      i++;
-      continue;
-    }
-
-    if (ch === '"') {
-      inDoubleQuote = true;
-      result += ch;
-      i++;
-      continue;
-    }
-
-    if (ch === '#') {
-      inComment = true;
-      commentsRemoved++;
-      i++;
-      continue;
-    }
-
-    result += ch;
-    i++;
+  } catch (err) {
+    stats.errors.push(`Falha ao processar ${fullPath}: ${err.message}`);
   }
-
-  const cleaned = result
-    .split('\n')
-    .map(line => line.replace(/\s+$/, ''))
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim() + '\n';
-
-  return {
-    cleaned,
-    blockCommentsCount: 0,
-    lineCommentsCount: commentsRemoved
-  };
-}
-
-function stripCommentsFromCss(content) {
-  let commentsRemoved = 0;
-  const cleaned = content.replace(/\/\*[\s\S]*?\*\//g, (match) => {
-    if (match.includes('@license')) return match;
-    commentsRemoved++;
-    return '';
-  })
-    .split('\n')
-    .map(line => line.replace(/\s+$/, ''))
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim() + '\n';
-
-  return {
-    cleaned,
-    blockCommentsCount: commentsRemoved,
-    lineCommentsCount: 0
-  };
 }
 
 function processDirectory(targetDir, options, ignoredDirs, stats = {
@@ -298,69 +325,17 @@ function processDirectory(targetDir, options, ignoredDirs, stats = {
       continue;
     }
 
-    const ext = path.extname(entry.name).toLowerCase();
-    const isJs = JS_EXTS.has(ext);
-    const isShellOrPy = SHELL_PYTHON_EXTS.has(ext);
-    const isCss = CSS_EXTS.has(ext);
-
-    if (!isJs && !isShellOrPy && !isCss) continue;
-
-    stats.scannedFiles++;
-
-    try {
-      const original = fs.readFileSync(fullPath, 'utf8');
-      const origLines = original.split('\n').length;
-      let result = null;
-
-      if (isJs) {
-        result = stripCommentsWithAst(original, ext);
-      } else if (isShellOrPy) {
-        result = stripCommentsFromShellOrPython(original);
-      } else if (isCss) {
-        result = stripCommentsFromCss(original);
-      }
-
-      if (result && result.cleaned !== original) {
-        const linesDiff = Math.max(0, origLines - result.cleaned.split('\n').length);
-
-        if (!options.dryRun) {
-          fs.writeFileSync(fullPath, result.cleaned, 'utf8');
-
-          if (isJs && ext !== '.ts' && ext !== '.tsx' && ext !== '.jsx') {
-            try {
-              execSync(`node -c "${fullPath}"`, { stdio: 'pipe' });
-            } catch (syntaxErr) {
-              fs.writeFileSync(fullPath, original, 'utf8');
-              stats.errors.push(`Sintaxe inválida detectada e revertida em ${path.relative(options.targetDir, fullPath)}: ${syntaxErr.message}`);
-              continue;
-            }
-          }
-        }
-
-        stats.filesCleaned++;
-        stats.linesRemoved += linesDiff;
-        stats.totalBlockComments += result.blockCommentsCount;
-        stats.totalLineComments += result.lineCommentsCount;
-
-        stats.cleanedDetails.push({
-          filePath: path.relative(options.targetDir, fullPath) || path.basename(fullPath),
-          originalLines: origLines,
-          newLines: result.cleaned.split('\n').length,
-          linesRemoved: linesDiff,
-          reductionPercent: origLines > 0 ? ((linesDiff / origLines) * 100).toFixed(1) : 0,
-          blockComments: result.blockCommentsCount,
-          lineComments: result.lineCommentsCount
-        });
-      }
-    } catch (err) {
-      stats.errors.push(`Falha ao processar ${fullPath}: ${err.message}`);
-    }
+    cleanSingleFile(fullPath, options, stats);
   }
 
   return stats;
 }
 
-function ensureAiDirectiveRule(targetDir) {
+function ensureAiDirectiveRule(targetDir, allRules = false) {
+  if (allRules) {
+    return { type: 'multi', results: generateAllAiRules(targetDir) };
+  }
+
   const geminiMdPath = path.join(targetDir, 'GEMINI.md');
   const templatePath = path.join(__dirname, '..', 'templates', 'GEMINI_RULE.md');
   let ruleTemplate = '';
@@ -374,17 +349,17 @@ function ensureAiDirectiveRule(targetDir) {
   try {
     if (!fs.existsSync(geminiMdPath)) {
       fs.writeFileSync(geminiMdPath, ruleTemplate, 'utf8');
-      return { status: 'created', file: 'GEMINI.md' };
+      return { type: 'single', status: 'created', file: 'GEMINI.md' };
     } else {
       const existing = fs.readFileSync(geminiMdPath, 'utf8');
       if (!existing.includes('Clean Code Directive') && !existing.includes('clean-code')) {
         fs.appendFileSync(geminiMdPath, '\n\n' + ruleTemplate, 'utf8');
-        return { status: 'updated', file: 'GEMINI.md' };
+        return { type: 'single', status: 'updated', file: 'GEMINI.md' };
       }
-      return { status: 'already_present', file: 'GEMINI.md' };
+      return { type: 'single', status: 'already_present', file: 'GEMINI.md' };
     }
   } catch (err) {
-    return { status: 'error', error: err.message };
+    return { type: 'single', status: 'error', error: err.message };
   }
 }
 
@@ -393,7 +368,7 @@ function printDetailedReport(stats, options, durationMs, ruleResult) {
   console.log('                 RELATÓRIO DETALHADO - CLEAN CODE               ');
   console.log('================================================================');
   console.log(`Diretório analisado: ${options.targetDir}`);
-  console.log(`Modo de execução:    ${options.dryRun ? 'DRY-RUN (Simulação)' : 'FAVORITO / ATIVO'}`);
+  console.log(`Modo de execução:    ${options.dryRun ? 'DRY-RUN (Simulação)' : options.stagedOnly ? 'STAGED (Pré-Commit)' : 'FAVORITO / ATIVO'}`);
   console.log(`Tempo de varredura:  ${durationMs}ms`);
   console.log('----------------------------------------------------------------');
   console.log(`Total de arquivos varridos:    ${stats.scannedFiles}`);
@@ -408,7 +383,7 @@ function printDetailedReport(stats, options, durationMs, ruleResult) {
     stats.cleanedDetails.forEach(item => {
       console.log(` • ${item.filePath}`);
       console.log(`   - Linhas: ${item.originalLines} -> ${item.newLines} (-${item.linesRemoved} linhas | -${item.reductionPercent}%)`);
-      console.log(`   - Blocos JSDoc/Multi-linha: ${item.blockComments} | Linhas //: ${item.lineComments}`);
+      console.log(`   - Blocos JSDoc/Multi-linha: ${item.blockComments} | Linhas // ou #: ${item.lineComments}`);
     });
   } else {
     console.log('\nNenhum arquivo necessitou de limpeza. Todo o código já está puro!');
@@ -416,15 +391,23 @@ function printDetailedReport(stats, options, durationMs, ruleResult) {
 
   if (ruleResult) {
     console.log('\n----------------------------------------------------------------');
-    console.log('DIRETRIZ PERSISTENTE PARA IA:');
-    if (ruleResult.status === 'created') {
-      console.log(` ✓ Arquivo ${ruleResult.file} criado com sucesso! As IAs não comentarão mais este projeto.`);
-    } else if (ruleResult.status === 'updated') {
-      console.log(` ✓ Diretriz anexada ao ${ruleResult.file} existente com sucesso.`);
-    } else if (ruleResult.status === 'already_present') {
-      console.log(` ✓ Diretriz de Clean Code já estava ativa no ${ruleResult.file}.`);
-    } else if (ruleResult.status === 'error') {
-      console.log(` ! Não foi possível aplicar a regra no GEMINI.md: ${ruleResult.error}`);
+    console.log('DIRETRIZES PERSISTENTES PARA IA:');
+    if (ruleResult.type === 'multi') {
+      ruleResult.results.forEach(res => {
+        if (res.status === 'created' || res.status === 'updated') {
+          console.log(` ✓ Arquivo ${res.file} configurado com sucesso.`);
+        } else if (res.status === 'already_present') {
+          console.log(` ✓ Diretriz já presente em ${res.file}.`);
+        }
+      });
+    } else {
+      if (ruleResult.status === 'created') {
+        console.log(` ✓ Arquivo ${ruleResult.file} criado com sucesso! As IAs não comentarão mais este projeto.`);
+      } else if (ruleResult.status === 'updated') {
+        console.log(` ✓ Diretriz anexada ao ${ruleResult.file} existente com sucesso.`);
+      } else if (ruleResult.status === 'already_present') {
+        console.log(` ✓ Diretriz de Clean Code já estava ativa no ${ruleResult.file}.`);
+      }
     }
   }
 
@@ -441,21 +424,45 @@ function main() {
   const startTime = Date.now();
   const options = parseCliArgs();
 
-  ts = resolveTypeScript(options.targetDir);
-  if (!ts) {
-    console.warn('Aviso: TypeScript compiler API não foi encontrado globalmente nem localmente. Recomenda-se rodar "npm install".');
+  if (options.update) {
+    handleUpdate();
+    return;
   }
 
-  const ignoredDirs = new Set(DEFAULT_IGNORED_DIRS);
-  const cleanIgnore = loadCleanIgnore(options.targetDir);
-  for (const item of cleanIgnore) ignoredDirs.add(item);
-  for (const item of options.customIgnores) ignoredDirs.add(item);
+  if (options.setupHook) {
+    handleSetupHook(options.targetDir);
+    return;
+  }
 
-  const stats = processDirectory(options.targetDir, options, ignoredDirs);
+  ts = resolveTypeScript(options.targetDir);
+
+  const stats = {
+    scannedFiles: 0,
+    filesCleaned: 0,
+    linesRemoved: 0,
+    totalBlockComments: 0,
+    totalLineComments: 0,
+    cleanedDetails: [],
+    errors: []
+  };
+
+  if (options.stagedOnly) {
+    const stagedFiles = getStagedFiles(options.targetDir);
+    for (const file of stagedFiles) {
+      cleanSingleFile(file, options, stats);
+    }
+  } else {
+    const ignoredDirs = new Set(DEFAULT_IGNORED_DIRS);
+    const cleanIgnore = loadCleanIgnore(options.targetDir);
+    for (const item of cleanIgnore) ignoredDirs.add(item);
+    for (const item of options.customIgnores) ignoredDirs.add(item);
+
+    processDirectory(options.targetDir, options, ignoredDirs, stats);
+  }
 
   let ruleResult = null;
-  if (options.enforceRule && !options.dryRun) {
-    ruleResult = ensureAiDirectiveRule(options.targetDir);
+  if (options.enforceRule && !options.dryRun && !options.stagedOnly) {
+    ruleResult = ensureAiDirectiveRule(options.targetDir, options.allRules);
   }
 
   const durationMs = Date.now() - startTime;
@@ -467,9 +474,8 @@ if (require.main === module) {
 }
 
 module.exports = {
-  stripCommentsWithAst,
-  stripCommentsFromShellOrPython,
-  stripCommentsFromCss,
   processDirectory,
-  ensureAiDirectiveRule
+  cleanSingleFile,
+  ensureAiDirectiveRule,
+  handleSetupHook
 };

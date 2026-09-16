@@ -1,12 +1,12 @@
 ---
 name: clean-code
 description: >-
-  Executa varredura e limpeza profunda em arquivos de código, removendo todos os comentários desnecessários, cabeçalhos JSDoc e anotações redundantes, deixando apenas código puro, funcional e validado. Gera relatório detalhado e pode configurar regra preventiva no GEMINI.md.
+  Executa varredura e limpeza profunda em arquivos de código em 15+ linguagens (JS, TS, HTML, Vue, Svelte, Java, C#, PHP, Go, Rust, Python, Shell, YAML, CSS), removendo comentários desnecessários e anotações redundantes. Suporta auto-atualização (--update), pré-commit hook (--hook) e regras para múltiplas IAs (--all-rules).
 ---
 
-# Clean Code (Faxina Profunda e Código Puro)
+# Clean Code (Faxina Profunda e Engenharia de Código Puro)
 
-Esta skill executa uma varredura completa e automática para eliminar comentários desnecessários, cabeçalhos de documentação redundantes, anotações óbvias e linhas em branco excessivas de projetos de código, deixando apenas o código puro, executável e validado.
+Esta skill executa uma varredura completa, segura e automática para eliminar comentários desnecessários, cabeçalhos redundantes de documentação, anotações óbvias e linhas em branco excessivas de projetos de software. Também oferece integração nativa com Git hooks e regras de IA.
 
 ## Como Executar
 
@@ -21,26 +21,26 @@ Quando o usuário chamar `/clean-code` ou solicitar a limpeza:
      ```bash
      node "$HOME/.gemini/config/skills/clean-code/scripts/clean_code.js" "<caminho_do_projeto>"
      ```
-   - Caso a skill esteja instalada no workspace (`.agents/skills/clean-code`):
+   - No Workspace (`.agents/skills/clean-code`):
      ```bash
      node "./.agents/skills/clean-code/scripts/clean_code.js" "<caminho_do_projeto>"
      ```
 
-   *(Se `<caminho_do_projeto>` não for informado, o script utilizará o diretório atual de trabalho).*
+2. **Comandos e Flags Especiais:**
+   - `--update`: Atualiza a skill Clean Code para a versão mais recente do GitHub na hora.
+   - `--hook`: Instala o hook de pré-commit do Git no repositório ativo (`.git/hooks/pre-commit`). A partir de então, cada `git commit` limpa automaticamente os arquivos modificados.
+   - `--all-rules`: Cria diretrizes anti-comentários para todas as principais IAs (`GEMINI.md`, `.cursorrules`, `.cursor/rules/clean-code.mdc`, `.windsurfrules`, `.github/copilot-instructions.md` e `CLAUDE.md`).
+   - `--dry-run`: Simula a faxina e exibe o relatório detalhado sem alterar arquivos em disco.
+   - `--no-rule`: Pula a criação/atualização de arquivos de diretrizes.
+   - `--ignore <pasta>`: Ignora diretórios específicos adicionais.
 
-2. **Opções Disponíveis (CLI Flags):**
-   - `--dry-run`: Simula a faxina e exibe o relatório detalhado sem alterar nenhum arquivo em disco.
-   - `--no-rule`: Pula a criação/atualização da diretriz anti-comentários no `GEMINI.md`.
-   - `--ignore <pasta>`: Ignora diretórios adicionais especificados pelo usuário.
+3. **Linguagens e Formatos Suportados:**
+   - **Web & Frontend**: JavaScript, TypeScript, JSX, TSX, HTML, Vue, Svelte, Astro, CSS, SCSS, LESS.
+   - **Backend & Sistemas**: Java, C#, PHP, C, C++, Go, Rust, Kotlin, Python, Shell (`.sh`, `.bash`).
+   - **Configuração**: YAML, TOML, JSONC.
 
-3. **Garantias de Execução:**
-   - **AST-Based Parsing:** Utiliza a API de compilação do TypeScript para remover comentários de forma precisa, sem quebrar strings, templates literals ou regex.
-   - **Preservação Crítica:** Diretivas essenciais como `eslint-disable`, `@ts-expect-error`, `@license` e shebangs (`#!/...`) são preservadas.
-   - **Validação de Sintaxe Imediata:** Cada arquivo é verificado após a limpeza. Se houver erro de sintaxe, a alteração é revertida na hora.
-   - **Persistência Preventiva:** Garante a presença do arquivo de regra `GEMINI.md` no projeto alvo para que as IAs nunca mais voltem a sujar o código com comentários redundantes.
-
-4. **Retorno ao Usuário:**
-   - Apresente ao usuário o relatório detalhado gerado pelo script contendo:
-     - Arquivos limpos com contagem e porcentagem de linhas reduzidas.
-     - Quantidade de comentários em bloco vs. comentários de linha removidos.
-     - Confirmação da integridade sintática e status da diretriz permanente no `GEMINI.md`.
+4. **Garantias de Execução:**
+   - **Parser AST Real**: TypeScript compiler API para JS/TS; máquinas de estado para C-Style e Shell/Python (preserva strings, URLs e regex).
+   - **Preservação de Diretivas**: Mantém `eslint-disable`, `@ts-expect-error`, shebangs (`#!/...`), tags de licença e condicionais.
+   - **Rollback Imediato**: Se qualquer arquivo falhar na verificação de sintaxe, o arquivo original é imediatamente restaurado.
+   - **Relatório Detalhado**: Retorne ao usuário o resumo detalhado contendo a redução de linhas e os tipos de comentários eliminados.

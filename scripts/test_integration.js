@@ -1,9 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 const assert = require('assert');
-const { processDirectory, ensureAiDirectiveRule } = require('./clean_code');
+const { processDirectory, ensureAiDirectiveRule, handleSetupHook } = require('./clean_code');
 
-console.log('--- Teste de Integração (Varredura e GEMINI.md) ---');
+console.log('--- Teste de Integração (Varredura, GEMINI.md e Pre-Commit Hook) ---');
 
 const tempDir = path.join(__dirname, '..', 'temp_integration_test');
 if (fs.existsSync(tempDir)) {
@@ -19,6 +19,10 @@ fs.writeFileSync(jsPath, '/**\n * Test JSDoc\n */\nfunction calculate(x) {\n  //
 const pyPath = path.join(tempDir, 'script.py');
 fs.writeFileSync(pyPath, '#!/usr/bin/env python3\n# Script de teste\nmsg = "Ola # mundo"\nprint(msg) # log\n', 'utf8');
 
+// Arquivo Go/Java com comentários
+const goPath = path.join(tempDir, 'main.go');
+fs.writeFileSync(goPath, 'package main\n// Comentario go\nfunc main() {\n  // print\n  println("Hi")\n}\n', 'utf8');
+
 const ignoredDirs = new Set(['node_modules']);
 const options = {
   targetDir: tempDir,
@@ -29,7 +33,7 @@ const options = {
 };
 
 const stats = processDirectory(tempDir, options, ignoredDirs);
-assert.strictEqual(stats.filesCleaned, 2, '2 arquivos devem ter sido limpos');
+assert.strictEqual(stats.filesCleaned, 3, '3 arquivos devem ter sido limpos');
 assert.ok(stats.linesRemoved > 0, 'Linhas devem ter sido removidas');
 
 const cleanedJs = fs.readFileSync(jsPath, 'utf8');
@@ -40,6 +44,12 @@ assert.ok(cleanedJs.includes('return x * 2;'), 'Código funcional preservado');
 const ruleResult = ensureAiDirectiveRule(tempDir);
 assert.strictEqual(ruleResult.status, 'created', 'GEMINI.md deve ser criado');
 assert.ok(fs.existsSync(path.join(tempDir, 'GEMINI.md')), 'Arquivo GEMINI.md existe');
+
+// Teste de instalação de Pre-Commit Hook
+fs.mkdirSync(path.join(tempDir, '.git'), { recursive: true });
+const hookInstalled = handleSetupHook(tempDir);
+assert.strictEqual(hookInstalled, true, 'Hook deve ser instalado com sucesso');
+assert.ok(fs.existsSync(path.join(tempDir, '.git', 'hooks', 'pre-commit')), 'Arquivo pre-commit existe');
 
 // Limpeza
 fs.rmSync(tempDir, { recursive: true, force: true });
