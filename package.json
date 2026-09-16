@@ -1,0 +1,28 @@
+{
+  "name": "clean-code-skill",
+  "version": "1.0.0",
+  "description": "Antigravity skill and CLI to strip unnecessary comments, redundant JSDocs, and enforce clean code across AI workflows.",
+  "main": "scripts/clean_code.js",
+  "bin": {
+    "clean-code": "./scripts/clean_code.js"
+  },
+  "scripts": {
+    "clean": "node ./scripts/clean_code.js",
+    "test": "node ./scripts/test.js && node ./scripts/test_integration.js",
+    "install:global": "node ./install.js --global",
+    "install:project": "node ./install.js --project"
+  },
+  "keywords": [
+    "antigravity",
+    "clean-code",
+    "ai-agent",
+    "code-cleanup",
+    "ast",
+    "skills"
+  ],
+  "author": "Gumballxnz",
+  "license": "MIT",
+  "dependencies": {
+    "typescript": "^5.9.3"
+  }
+}
