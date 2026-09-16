@@ -4,7 +4,7 @@
   "description": "Antigravity skill and CLI to strip unnecessary comments, redundant JSDocs, and enforce clean code across AI workflows.",
   "main": "scripts/clean_code.js",
   "bin": {
-    "clean-code": "./scripts/clean_code.js"
+    "clean-code": "scripts/clean_code.js"
   },
   "publishConfig": {
     "access": "public"
