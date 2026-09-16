@@ -5,7 +5,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Antigravity Skill](https://img.shields.io/badge/Antigravity-Skill-blue.svg)](https://github.com/Gumballxnz/clean-code)
-[![NPM Package](https://img.shields.io/badge/npm-%40gumballxnz%2Fclean--code-red.svg)](https://www.npmjs.com/package/@gumballxnz/clean-code)
+[![NPM Package](https://img.shields.io/badge/npm-%40gumballwotersan%2Fclean--code-red.svg)](https://www.npmjs.com/package/@gumballwotersan/clean-code)
 [![Version](https://img.shields.io/badge/version-1.2.0-brightgreen.svg)](https://github.com/Gumballxnz/clean-code/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/Gumballxnz/clean-code/pulls)
 
@@ -50,7 +50,7 @@ O Clean Code reconhece o ambiente ativo (por variáveis de processo ou arquivos 
 ### 1. Execução Rápida via NPX (Sem Instalação Prévia)
 Se você tem Node.js instalado, pode rodar diretamente em qualquer pasta:
 ```bash
-npx @gumballxnz/clean-code
+npx @gumballwotersan/clean-code
 ```
 
 ### 2. Instalação Permanente para Google Antigravity
