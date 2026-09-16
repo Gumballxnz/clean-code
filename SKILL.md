@@ -44,3 +44,9 @@ Quando o usuário chamar `/clean-code` ou solicitar a limpeza:
    - **Preservação de Diretivas**: Mantém `eslint-disable`, `@ts-expect-error`, shebangs (`#!/...`), tags de licença e condicionais.
    - **Rollback Imediato**: Se qualquer arquivo falhar na verificação de sintaxe, o arquivo original é imediatamente restaurado.
    - **Relatório Detalhado**: Retorne ao usuário o resumo detalhado contendo a redução de linhas e os tipos de comentários eliminados.
+
+5. **Tratamento Condicional de Git / GitHub:**
+   - Se a pasta do projeto **NÃO** possuir repositório Git (`.git` ausente): apresente apenas o relatório e **NÃO mencione Git ou GitHub**.
+   - Se a pasta possuir repositório Git e houver arquivos limpos: pergunte explicitamente ao usuário:
+     *"Foram limpos X arquivos na branch `<branch>`. Deseja que eu realize o commit e envie (push) as alterações para o repositório remoto?"*
+     Se o usuário aprovar, execute `git commit -am "chore: clean code"` e `git push origin <branch>`.

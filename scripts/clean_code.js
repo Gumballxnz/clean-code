@@ -388,6 +388,17 @@ function printDetailedReport(stats, options, durationMs, ruleResult) {
     });
   }
 
+  if (gitInfo && stats.filesCleaned > 0) {
+    console.log('\n----------------------------------------------------------------');
+    console.log('REPOSITÓRIO GIT DETECTADO:');
+    console.log(` • Branch ativa: ${gitInfo.branch || 'main'}`);
+    if (gitInfo.remoteUrl) {
+      console.log(` • Remoto configurado: ${gitInfo.remoteUrl}`);
+    }
+    console.log(' 💡 Pergunte ao usuário se deseja enviar as alterações:');
+    console.log(`    git commit -am "chore: clean code" && git push origin ${gitInfo.branch || 'main'}`);
+  }
+
   if (stats.errors.length > 0) {
     console.log('\n----------------------------------------------------------------');
     console.log(`ALERTAS E REVERSÕES PREVENTIVAS (${stats.errors.length}):`);
@@ -395,6 +406,27 @@ function printDetailedReport(stats, options, durationMs, ruleResult) {
   }
 
   console.log('================================================================\n');
+}
+
+function getGitRepoInfo(targetDir) {
+  try {
+    const isGit = execSync('git rev-parse --is-inside-work-tree', { cwd: targetDir, stdio: 'pipe' }).toString().trim() === 'true';
+    if (!isGit) return null;
+
+    let branch = '';
+    try {
+      branch = execSync('git rev-parse --abbrev-ref HEAD', { cwd: targetDir, stdio: 'pipe' }).toString().trim();
+    } catch (_) {}
+
+    let remoteUrl = '';
+    try {
+      remoteUrl = execSync('git remote get-url origin', { cwd: targetDir, stdio: 'pipe' }).toString().trim();
+    } catch (_) {}
+
+    return { isGit: true, branch, remoteUrl };
+  } catch (_) {
+    return null;
+  }
 }
 
 function main() {
@@ -442,8 +474,9 @@ function main() {
     ruleResult = ensureAiDirectiveRule(options.targetDir, options.allRules);
   }
 
+  const gitInfo = getGitRepoInfo(options.targetDir);
   const durationMs = Date.now() - startTime;
-  printDetailedReport(stats, options, durationMs, ruleResult);
+  printDetailedReport(stats, options, durationMs, ruleResult, gitInfo);
 }
 
 if (require.main === module) {
