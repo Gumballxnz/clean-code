@@ -13,6 +13,15 @@ const {
   stripCommentsFromConfig
 } = require('./parsers');
 
+const {
+  detectFramework,
+  scanDirectoryForSensitiveFiles,
+  ensureGitIgnoreSafety,
+  ensureGitIgnoreHasEnv,
+  updateEnvFiles,
+  scanAndSanitizeSecretsInContent
+} = require('./secret_scanner');
+
 const { generateAllAiRules, syncAiRules } = require('../templates/MULTI_AI_RULES');
 
 const DEFAULT_IGNORED_DIRS = new Set([
@@ -48,6 +57,7 @@ const TEMPLATE_EXTS = new Set(['.html', '.htm', '.vue', '.svelte', '.astro']);
 const SHELL_PYTHON_EXTS = new Set(['.sh', '.bash', '.py']);
 const CSS_EXTS = new Set(['.css', '.scss', '.less']);
 const CONFIG_EXTS = new Set(['.yaml', '.yml', '.toml', '.jsonc']);
+const MARKDOWN_EXTS = new Set(['.md', '.markdown']);
 
 let ts = null;
 function resolveTypeScript(targetDir) {
@@ -77,6 +87,9 @@ function parseCliArgs() {
     update: false,
     setupHook: false,
     stagedOnly: false,
+    sanitizeSecrets: true,
+    secretsOnly: false,
+    cleanTests: false,
     customIgnores: new Set()
   };
 
@@ -95,6 +108,15 @@ function parseCliArgs() {
       options.enforceRule = false;
     } else if (arg === '--rule' || arg === '--enforce-rule') {
       options.enforceRule = true;
+    } else if (arg === '--sanitize-secrets') {
+      options.sanitizeSecrets = true;
+    } else if (arg === '--no-secrets') {
+      options.sanitizeSecrets = false;
+    } else if (arg === '--secrets-only') {
+      options.secretsOnly = true;
+      options.sanitizeSecrets = true;
+    } else if (arg === '--clean-tests' || arg === '--purge-tests') {
+      options.cleanTests = true;
     } else if (arg === '--dry-run') {
       options.dryRun = true;
     } else if (arg === '--verbose' || arg === '-v') {
@@ -220,7 +242,7 @@ function loadCleanIgnore(targetDir) {
   return ignores;
 }
 
-function cleanSingleFile(fullPath, options, stats) {
+function cleanSingleFile(fullPath, options, stats, secretContext = null) {
   const ext = path.extname(fullPath).toLowerCase();
   const isJs = JS_EXTS.has(ext);
   const isCStyle = CSTYLE_EXTS.has(ext);
@@ -228,8 +250,9 @@ function cleanSingleFile(fullPath, options, stats) {
   const isShellOrPy = SHELL_PYTHON_EXTS.has(ext);
   const isCss = CSS_EXTS.has(ext);
   const isConfig = CONFIG_EXTS.has(ext);
+  const isMarkdown = MARKDOWN_EXTS.has(ext);
 
-  if (!isJs && !isCStyle && !isTemplate && !isShellOrPy && !isCss && !isConfig) {
+  if (!isJs && !isCStyle && !isTemplate && !isShellOrPy && !isCss && !isConfig && !isMarkdown) {
     return;
   }
 
@@ -238,28 +261,59 @@ function cleanSingleFile(fullPath, options, stats) {
   try {
     const original = fs.readFileSync(fullPath, 'utf8');
     const origLines = original.split('\n').length;
-    let result = null;
+    let workingContent = original;
+    let commentResult = null;
 
-    if (isJs) {
-      if (!ts) ts = resolveTypeScript(options.targetDir);
-      result = stripCommentsWithAst(original, ext, ts);
-    } else if (isCStyle) {
-      result = stripCommentsFromCStyle(original, ext);
-    } else if (isTemplate) {
-      result = stripCommentsFromHtmlAndTemplates(original, ext, ts);
-    } else if (isShellOrPy) {
-      result = stripCommentsFromShellOrPython(original);
-    } else if (isCss) {
-      result = stripCommentsFromCss(original);
-    } else if (isConfig) {
-      result = stripCommentsFromConfig(original, ext);
+    if (!options.secretsOnly && !isMarkdown) {
+      if (isJs) {
+        if (!ts) ts = resolveTypeScript(options.targetDir);
+        commentResult = stripCommentsWithAst(workingContent, ext, ts);
+      } else if (isCStyle) {
+        commentResult = stripCommentsFromCStyle(workingContent, ext);
+      } else if (isTemplate) {
+        commentResult = stripCommentsFromHtmlAndTemplates(workingContent, ext, ts);
+      } else if (isShellOrPy) {
+        commentResult = stripCommentsFromShellOrPython(workingContent);
+      } else if (isCss) {
+        commentResult = stripCommentsFromCss(workingContent);
+      } else if (isConfig) {
+        commentResult = stripCommentsFromConfig(workingContent, ext);
+      }
+
+      if (commentResult && commentResult.cleaned) {
+        workingContent = commentResult.cleaned;
+      }
     }
 
-    if (result && result.cleaned !== original) {
-      const linesDiff = Math.max(0, origLines - result.cleaned.split('\n').length);
+    let secretResult = null;
+    if (options.sanitizeSecrets && secretContext) {
+      secretResult = scanAndSanitizeSecretsInContent(
+        workingContent,
+        fullPath,
+        options.targetDir,
+        secretContext.registry,
+        secretContext.framework
+      );
+      if (secretResult.hasChanges) {
+        workingContent = secretResult.modifiedContent;
+        stats.secretsSanitized += secretResult.detections.length;
+        for (const det of secretResult.detections) {
+          stats.sanitizedSecretsList.push({
+            file: path.relative(options.targetDir, fullPath) || path.basename(fullPath),
+            ruleName: det.ruleName,
+            varName: det.varName,
+            expr: det.expr
+          });
+        }
+      }
+    }
+
+    if (workingContent !== original) {
+      const finalLines = workingContent.split('\n').length;
+      const linesDiff = Math.max(0, origLines - finalLines);
 
       if (!options.dryRun) {
-        fs.writeFileSync(fullPath, result.cleaned, 'utf8');
+        fs.writeFileSync(fullPath, workingContent, 'utf8');
 
         if (isJs && ext !== '.ts' && ext !== '.tsx' && ext !== '.jsx') {
           try {
@@ -280,17 +334,20 @@ function cleanSingleFile(fullPath, options, stats) {
 
       stats.filesCleaned++;
       stats.linesRemoved += linesDiff;
-      stats.totalBlockComments += result.blockCommentsCount;
-      stats.totalLineComments += result.lineCommentsCount;
+      if (commentResult) {
+        stats.totalBlockComments += commentResult.blockCommentsCount || 0;
+        stats.totalLineComments += commentResult.lineCommentsCount || 0;
+      }
 
       stats.cleanedDetails.push({
         filePath: path.relative(options.targetDir, fullPath) || path.basename(fullPath),
         originalLines: origLines,
-        newLines: result.cleaned.split('\n').length,
+        newLines: finalLines,
         linesRemoved: linesDiff,
         reductionPercent: origLines > 0 ? ((linesDiff / origLines) * 100).toFixed(1) : 0,
-        blockComments: result.blockCommentsCount,
-        lineComments: result.lineCommentsCount
+        blockComments: commentResult ? commentResult.blockCommentsCount || 0 : 0,
+        lineComments: commentResult ? commentResult.lineCommentsCount || 0 : 0,
+        secretsCount: secretResult ? secretResult.detections.length : 0
       });
     }
   } catch (err) {
@@ -304,9 +361,11 @@ function processDirectory(targetDir, options, ignoredDirs, stats = {
   linesRemoved: 0,
   totalBlockComments: 0,
   totalLineComments: 0,
+  secretsSanitized: 0,
+  sanitizedSecretsList: [],
   cleanedDetails: [],
   errors: []
-}) {
+}, secretContext = null) {
   let entries = [];
   try {
     entries = fs.readdirSync(targetDir, { withFileTypes: true });
@@ -318,14 +377,23 @@ function processDirectory(targetDir, options, ignoredDirs, stats = {
   for (const entry of entries) {
     const fullPath = path.join(targetDir, entry.name);
 
-    if (entry.isDirectory()) {
-      if (!ignoredDirs.has(entry.name)) {
-        processDirectory(fullPath, options, ignoredDirs, stats);
+    const relPath = path.relative(options.targetDir, fullPath).replace(/\\/g, '/');
+    const isIgnored = ignoredDirs.has(entry.name) || ignoredDirs.has(relPath) || Array.from(ignoredDirs).some(ig => {
+      if (ig.includes('*')) {
+        const regex = new RegExp('^' + ig.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$');
+        return regex.test(relPath) || regex.test(entry.name);
       }
+      return false;
+    });
+
+    if (isIgnored) continue;
+
+    if (entry.isDirectory()) {
+      processDirectory(fullPath, options, ignoredDirs, stats, secretContext);
       continue;
     }
 
-    cleanSingleFile(fullPath, options, stats);
+    cleanSingleFile(fullPath, options, stats, secretContext);
   }
 
   return stats;
@@ -342,7 +410,7 @@ function ensureAiDirectiveRule(targetDir, allRules = false) {
   }
 }
 
-function printDetailedReport(stats, options, durationMs, ruleResult, gitInfo = null) {
+function printDetailedReport(stats, options, durationMs, ruleResult, gitInfo = null, envSyncResult = null, sensitiveFiles = [], gitIgnoreSafetyResult = null) {
   console.log('\n================================================================');
   console.log('                 RELATÓRIO DETALHADO - CLEAN CODE               ');
   console.log('================================================================');
@@ -355,17 +423,66 @@ function printDetailedReport(stats, options, durationMs, ruleResult, gitInfo = n
   console.log(`Linhas totais eliminadas:      ${stats.linesRemoved}`);
   console.log(`Comentários em bloco (JSDoc):  ${stats.totalBlockComments}`);
   console.log(`Comentários de linha única:    ${stats.totalLineComments}`);
+  console.log(`Credenciais sanitizadas:       ${stats.secretsSanitized}`);
   console.log('----------------------------------------------------------------');
 
   if (stats.cleanedDetails.length > 0) {
     console.log('\nDETALHES POR ARQUIVO:');
     stats.cleanedDetails.forEach(item => {
+      const secInfo = item.secretsCount > 0 ? ` | 🛡️ Segredos extraídos: ${item.secretsCount}` : '';
       console.log(` • ${item.filePath}`);
-      console.log(`   - Linhas: ${item.originalLines} -> ${item.newLines} (-${item.linesRemoved} linhas | -${item.reductionPercent}%)`);
+      console.log(`   - Linhas: ${item.originalLines} -> ${item.newLines} (-${item.linesRemoved} linhas | -${item.reductionPercent}%)${secInfo}`);
       console.log(`   - Blocos JSDoc/Multi-linha: ${item.blockComments} | Linhas // ou #: ${item.lineComments}`);
     });
   } else {
     console.log('\nNenhum arquivo necessitou de limpeza. Todo o código já está puro!');
+  }
+
+  const sensitiveKeys = (sensitiveFiles && sensitiveFiles.sensitiveKeys) || [];
+  const scratchTests = (sensitiveFiles && sensitiveFiles.scratchTests) || [];
+
+  if (sensitiveKeys.length > 0) {
+    console.log('\n----------------------------------------------------------------');
+    console.log(`SEGURANÇA: CHAVES SSH & ARQUIVOS PRIVADOS PROTEGIDOS (${sensitiveKeys.length}):`);
+    sensitiveKeys.forEach(f => {
+      console.log(` 🔒 ${f.relativePath} (${(f.sizeBytes / 1024).toFixed(1)} KB)`);
+    });
+  }
+
+  if (scratchTests.length > 0) {
+    console.log('\n----------------------------------------------------------------');
+    console.log(`ARQUIVOS DE TESTE / RASCUNHOS MAPEADOS (${scratchTests.length} encontrados):`);
+    scratchTests.forEach(f => {
+      console.log(` 🧪 ${f.relativePath} (${(f.sizeBytes / 1024).toFixed(1)} KB)`);
+    });
+    console.log('\n 🔒 Todos os rascunhos de teste foram blindados no .gitignore contra vazamentos.');
+    console.log(' 💡 Deseja deletar esses arquivos de teste ou eles ainda têm utilidade no seu projeto?');
+    console.log('    (Para deletá-los automaticamente com segurança, rode: clean-code --clean-tests)');
+  }
+
+  if (stats.testsDeleted && stats.testsDeleted > 0) {
+    console.log(`\n 🗑️ ${stats.testsDeleted} arquivo(s) de teste/rascunho deletado(s) conforme solicitado (--clean-tests).`);
+  }
+
+  if (gitIgnoreSafetyResult && gitIgnoreSafetyResult.updated) {
+    console.log(`\n • Proteção no .gitignore aplicada para: ${gitIgnoreSafetyResult.added.join(', ')}`);
+  }
+
+  if (stats.secretsSanitized > 0 || (envSyncResult && (envSyncResult.addedToEnv > 0 || envSyncResult.addedToExample > 0))) {
+    console.log('\n----------------------------------------------------------------');
+    console.log('SEGURANÇA: CREDENCIAIS SANITIZADAS & MIGRADAS PARA O .ENV:');
+    console.log(` • Credenciais isoladas no código:    ${stats.secretsSanitized}`);
+    if (envSyncResult) {
+      console.log(` • Variáveis adicionadas ao .env:      ${envSyncResult.addedToEnv}`);
+      console.log(` • Placeholders no .env.example:       ${envSyncResult.addedToExample}`);
+      console.log(` • Blindagem ativa no .gitignore:      SIM (.env protegido contra commits)`);
+    }
+    if (stats.sanitizedSecretsList.length > 0) {
+      console.log('\nLISTA DE SEGREDO(S) PROTEGIDO(S):');
+      stats.sanitizedSecretsList.forEach(item => {
+        console.log(`   - [${item.ruleName}] ${item.file} -> ${item.expr}`);
+      });
+    }
   }
 
   if (ruleResult && ruleResult.configured) {
@@ -376,7 +493,9 @@ function printDetailedReport(stats, options, durationMs, ruleResult, gitInfo = n
     }
     ruleResult.configured.forEach(res => {
       const tag = res.providerName ? `[${res.providerName}]` : '';
-      if (res.status === 'created') {
+      if (res.status === 'migrated') {
+        console.log(` 📦 ${tag} ${res.file} (raiz limpa).`);
+      } else if (res.status === 'created') {
         console.log(` ✓ ${tag} Arquivo ${res.file} criado com sucesso!`);
       } else if (res.status === 'updated') {
         console.log(` ✓ ${tag} Diretriz anexada ao ${res.file} com sucesso.`);
@@ -445,28 +564,58 @@ function main() {
 
   ts = resolveTypeScript(options.targetDir);
 
+  const secretRegistry = new Map();
+  const framework = detectFramework(options.targetDir);
+  const secretContext = { registry: secretRegistry, framework };
+
   const stats = {
     scannedFiles: 0,
     filesCleaned: 0,
     linesRemoved: 0,
     totalBlockComments: 0,
     totalLineComments: 0,
+    secretsSanitized: 0,
+    sanitizedSecretsList: [],
     cleanedDetails: [],
     errors: []
   };
 
+  const ignoredDirs = new Set(DEFAULT_IGNORED_DIRS);
+  const cleanIgnore = loadCleanIgnore(options.targetDir);
+  for (const item of cleanIgnore) ignoredDirs.add(item);
+  for (const item of options.customIgnores) ignoredDirs.add(item);
+
+  let sensitiveFiles = [];
+  let gitIgnoreSafetyResult = null;
+  if (!options.stagedOnly) {
+    sensitiveFiles = scanDirectoryForSensitiveFiles(options.targetDir, ignoredDirs);
+    gitIgnoreSafetyResult = ensureGitIgnoreSafety(options.targetDir, sensitiveFiles, options.dryRun);
+
+    if (options.cleanTests && !options.dryRun && sensitiveFiles.scratchTests && sensitiveFiles.scratchTests.length > 0) {
+      stats.testsDeleted = 0;
+      for (const sf of sensitiveFiles.scratchTests) {
+        try {
+          if (fs.existsSync(sf.fullPath)) {
+            fs.unlinkSync(sf.fullPath);
+            stats.testsDeleted++;
+          }
+        } catch (_) {}
+      }
+    }
+  }
+
   if (options.stagedOnly) {
     const stagedFiles = getStagedFiles(options.targetDir);
     for (const file of stagedFiles) {
-      cleanSingleFile(file, options, stats);
+      cleanSingleFile(file, options, stats, secretContext);
     }
   } else {
-    const ignoredDirs = new Set(DEFAULT_IGNORED_DIRS);
-    const cleanIgnore = loadCleanIgnore(options.targetDir);
-    for (const item of cleanIgnore) ignoredDirs.add(item);
-    for (const item of options.customIgnores) ignoredDirs.add(item);
+    processDirectory(options.targetDir, options, ignoredDirs, stats, secretContext);
+  }
 
-    processDirectory(options.targetDir, options, ignoredDirs, stats);
+  let envSyncResult = null;
+  if (options.sanitizeSecrets && secretRegistry.size > 0) {
+    envSyncResult = updateEnvFiles(options.targetDir, Array.from(secretRegistry.values()), options.dryRun);
   }
 
   let ruleResult = null;
@@ -476,7 +625,7 @@ function main() {
 
   const gitInfo = getGitRepoInfo(options.targetDir);
   const durationMs = Date.now() - startTime;
-  printDetailedReport(stats, options, durationMs, ruleResult, gitInfo);
+  printDetailedReport(stats, options, durationMs, ruleResult, gitInfo, envSyncResult, sensitiveFiles, gitIgnoreSafetyResult);
 }
 
 if (require.main === module) {

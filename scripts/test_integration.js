@@ -40,7 +40,7 @@ assert.ok(cleanedJs.includes('return x * 2;'), 'Código funcional preservado');
 
 const ruleResult = ensureAiDirectiveRule(tempDir);
 assert.ok(ruleResult.configured.some(r => r.file.includes('GEMINI.md') && r.status === 'created'), 'GEMINI.md deve ser criado');
-assert.ok(fs.existsSync(path.join(tempDir, 'GEMINI.md')), 'Arquivo GEMINI.md existe');
+assert.ok(fs.existsSync(path.join(tempDir, '.agents', 'GEMINI.md')), 'Arquivo .agents/GEMINI.md existe');
 
 fs.mkdirSync(path.join(tempDir, '.git'), { recursive: true });
 const hookInstalled = handleSetupHook(tempDir);

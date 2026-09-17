@@ -12,6 +12,8 @@ Write pure, self-documenting, production-ready code. Do NOT add unnecessary, red
 3. **No Dead or Commented-Out Code**: Never leave commented-out code blocks. If code is deprecated or obsolete, delete it; version control (Git) retains the history.
 4. **Preserve Essential Directives Only**: Keep only strictly necessary compiler and linter directives (e.g. \`eslint-disable\`, \`@ts-expect-error\`, \`@ts-ignore\`, \`@license\`, shebang \`#!/usr/bin/env\`, \`//go:build\`).
 5. **Compact Line Spacing**: Avoid clusters of empty lines. Keep code readable with at most one empty line between logical blocks.
+6. **Zero Hardcoded Secrets & Credentials**: NEVER expose or hardcode API keys, secrets, access tokens, database URLs, Supabase keys, Firebase keys, Stripe keys, SSH private keys, or certificates in source code or public documentation. Always load secrets strictly from environment variables (\`.env\`, \`process.env.*\`, \`os.getenv\`, etc.). Always ensure \`.env\` and sensitive credential files are listed in \`.gitignore\`.
+7. **No Scratch Test Files in Commits**: Temporary test scripts, scratch files (e.g. \`test_*.js\`, \`teste_*.js\`, \`scratch.*\`, \`temp_*\`), mock data dumps, or ad-hoc verification scripts created during tasks must NEVER be left in project roots or committed to version control. Always clean them up or ensure they are listed in \`.gitignore\`.
 `;
 
 const MDC_FRONTMATTER = `---
@@ -20,6 +22,50 @@ globs: *
 alwaysApply: true
 ---
 `;
+
+const ROOT_MIGRATION_FILES = ['GEMINI.md', 'AGENTS.md', 'CLAUDE.md', 'CODEX.md'];
+
+function migrateRootRulesToAgentsDir(targetDir) {
+  const migrations = [];
+  const agentsDir = path.join(targetDir, '.agents');
+
+  for (const fileName of ROOT_MIGRATION_FILES) {
+    const rootPath = path.join(targetDir, fileName);
+    if (fs.existsSync(rootPath)) {
+      try {
+        if (!fs.existsSync(agentsDir)) {
+          fs.mkdirSync(agentsDir, { recursive: true });
+        }
+        const targetPath = path.join(agentsDir, fileName);
+        const rootContent = fs.readFileSync(rootPath, 'utf8');
+
+        if (!fs.existsSync(targetPath)) {
+          fs.writeFileSync(targetPath, rootContent, 'utf8');
+        } else {
+          const targetContent = fs.readFileSync(targetPath, 'utf8');
+          if (!targetContent.includes('Clean Code Directives') && rootContent.includes('Clean Code Directives')) {
+            fs.appendFileSync(targetPath, '\n\n' + CLEAN_CODE_DIRECTIVE, 'utf8');
+          }
+        }
+
+        fs.unlinkSync(rootPath);
+        migrations.push({
+          status: 'migrated',
+          file: `${fileName} -> .agents/${fileName}`,
+          providerName: 'Organização de Diretrizes (.agents/)'
+        });
+      } catch (err) {
+        migrations.push({
+          status: 'error',
+          file: fileName,
+          error: `Falha ao migrar para .agents/: ${err.message}`
+        });
+      }
+    }
+  }
+
+  return migrations;
+}
 
 function ensureFileWithDirective(filePath, content, appendHeader = 'Clean Code Directives') {
   try {
@@ -56,8 +102,8 @@ const AI_PROVIDERS = [
       return hasEnv || hasFiles;
     },
     getRules: (targetDir) => [
-      { path: path.join(targetDir, 'GEMINI.md'), content: CLEAN_CODE_DIRECTIVE },
-      { path: path.join(targetDir, 'AGENTS.md'), content: CLEAN_CODE_DIRECTIVE }
+      { path: path.join(targetDir, '.agents', 'GEMINI.md'), content: CLEAN_CODE_DIRECTIVE },
+      { path: path.join(targetDir, '.agents', 'AGENTS.md'), content: CLEAN_CODE_DIRECTIVE }
     ]
   },
   {
@@ -196,8 +242,12 @@ function detectActiveAiEnvironments(targetDir, env = process.env) {
 
 function syncAiRules(targetDir, options = { allRules: false, env: process.env }) {
   const results = [];
-  const detectedProviders = detectActiveAiEnvironments(targetDir, options.env);
+  const migrations = migrateRootRulesToAgentsDir(targetDir);
+  for (const m of migrations) {
+    results.push(m);
+  }
 
+  const detectedProviders = detectActiveAiEnvironments(targetDir, options.env);
   let targetProviders = [];
 
   if (options.allRules) {
@@ -210,7 +260,6 @@ function syncAiRules(targetDir, options = { allRules: false, env: process.env })
       if (antigravityProvider) targetProviders.push(antigravityProvider);
     }
   } else {
-
     const defaultProvider = AI_PROVIDERS.find(p => p.id === 'antigravity');
     if (defaultProvider) targetProviders.push(defaultProvider);
   }
@@ -238,6 +287,7 @@ module.exports = {
   CLEAN_CODE_DIRECTIVE,
   AI_PROVIDERS,
   detectActiveAiEnvironments,
+  migrateRootRulesToAgentsDir,
   syncAiRules,
   generateAllAiRules,
   ensureFileWithDirective

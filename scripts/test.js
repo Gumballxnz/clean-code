@@ -77,7 +77,7 @@ fs.mkdirSync(tempDir, { recursive: true });
 
 const multiAiResults = generateAllAiRules(tempDir);
 assert.ok(multiAiResults.length >= 8, 'Deve gerar arquivos de regras para 8+ IAs');
-assert.ok(fs.existsSync(path.join(tempDir, 'GEMINI.md')), 'GEMINI.md gerado');
+assert.ok(fs.existsSync(path.join(tempDir, '.agents', 'GEMINI.md')), '.agents/GEMINI.md gerado');
 assert.ok(fs.existsSync(path.join(tempDir, '.cursorrules')), '.cursorrules gerado');
 assert.ok(fs.existsSync(path.join(tempDir, '.cursor', 'rules', 'clean-code.mdc')), '.cursor/rules/clean-code.mdc gerado');
 assert.ok(fs.existsSync(path.join(tempDir, '.windsurfrules')), '.windsurfrules gerado');

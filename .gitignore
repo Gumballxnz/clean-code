@@ -7,3 +7,25 @@ Thumbs.db
 *.tmp
 *.log
 .env
+
+# Blindagem de Segredos e Chaves SSH (Clean Code)
+.env.local
+.env.*.local
+*.pem
+*.key
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+*.pfx
+*.p12
+*serviceAccount*.json
+*credentials*.json
+
+# Blindagem de Segredos e Chaves SSH (Clean Code)
+temp_*
+tmp_*
+*scratch*
+test_temp*
+teste_temp*
+*.dump.sql

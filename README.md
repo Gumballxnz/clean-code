@@ -1,28 +1,29 @@
-# 🧹 Clean Code Skill & CLI (v1.2.0)
+# 🧹 Clean Code Skill & CLI (v1.3.0)
 
-> **Transforme seu código em código puro, funcional e validado.**  
-> Elimine anotações desnecessárias, comentários redundantes gerados por IA e cabeçalhos JSDoc óbvios em segundos.
+> **Transforme seu código em código puro, funcional, seguro e validado.**  
+> Elimine anotações desnecessárias, comentários redundantes gerados por IA e **higienize credenciais expostas (Supabase, OpenAI, Firebase, Stripe)** movendo-as automaticamente para `.env` e blindando seu `.gitignore`.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Antigravity Skill](https://img.shields.io/badge/Antigravity-Skill-blue.svg)](https://github.com/Gumballxnz/clean-code)
 [![NPM Package](https://img.shields.io/badge/npm-%40gumballwotersan%2Fclean--code-red.svg)](https://www.npmjs.com/package/@gumballwotersan/clean-code)
-[![Version](https://img.shields.io/badge/version-1.2.0-brightgreen.svg)](https://github.com/Gumballxnz/clean-code/releases)
+[![Version](https://img.shields.io/badge/version-1.3.0-brightgreen.svg)](https://github.com/Gumballxnz/clean-code/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/Gumballxnz/clean-code/pulls)
 
 ---
 
 ## 🚀 O que é o Clean Code?
 
-Ao programar com inteligência artificial, é comum ver assistentes adicionando dezenas de comentários óbvios (`// função que faz login`, `// loop pelos itens`, etc.) e JSDocs redundantes que poluem o código.
+Ao programar com inteligência artificial, é comum ver assistentes adicionando dezenas de comentários óbvios (`// função que faz login`, `// loop pelos itens`, etc.) e, pior ainda, **chaves de API e credenciais hardcodadas no código**, o que leva a invasões e vazamentos graves no GitHub.
 
 O **Clean Code** é uma **Skill oficial para o Google Antigravity** e uma **ferramenta CLI universal** que:
 1. **Remove todo o ruído visual e comentários redundantes** de forma inteligente e segura.
-2. **Auto-Detecta a IA ou IDE em Uso**: identifica automaticamente se você está rodando no Cursor, Antigravity, Claude Code, Windsurf, VS Code com Copilot/Cline ou OpenAI Codex, e gera as diretrizes exatas para aquele ambiente.
-3. **Suporta 15+ linguagens e formatos** (Web, Backend, Sistemas e Configurações).
-4. **Preserva diretivas essenciais** (como `eslint-disable`, `@ts-expect-error`, `@license`, shebangs `#!`, `//go:build`).
-5. **Garante integridade sintática** via AST do TypeScript, máquinas de estados e validação com reversão instantânea em caso de erro.
-6. **Git Pre-Commit Hook Automático**: limpa apenas os arquivos modificados antes de cada commit.
-7. **Auto-atualização em 1 comando** (`--update`) via Git ou GitHub.
+2. **🛡️ Sanitização Automática de Segredos**: detecta tokens e credenciais expostas (Supabase URL/Key, OpenAI, Anthropic, Firebase, Stripe, AWS, GitHub, etc.), move para `.env`, cria o template público `.env.example`, blinda o `.gitignore` e substitui no código com segurança (`process.env`, `import.meta.env`, `os.getenv`).
+3. **Auto-Detecta a IA ou IDE em Uso**: identifica automaticamente se você está rodando no Cursor, Antigravity, Claude Code, Windsurf, VS Code com Copilot/Cline ou OpenAI Codex, e gera as diretrizes exatas para aquele ambiente.
+4. **Suporta 15+ linguagens e formatos** (Web, Backend, Sistemas e Configurações).
+5. **Preserva diretivas essenciais** (como `eslint-disable`, `@ts-expect-error`, `@license`, shebangs `#!`, `//go:build`).
+6. **Garante integridade sintática** via AST do TypeScript, máquinas de estados e validação com reversão instantânea em caso de erro.
+7. **Git Pre-Commit Hook Automático**: limpa apenas os arquivos modificados antes de cada commit.
+8. **Auto-atualização em 1 comando** (`--update`) via Git ou GitHub.
 
 ---
 
@@ -129,6 +130,9 @@ node path/to/clean-code/scripts/clean_code.js [caminho_do_projeto] [opções]
 | Flag | Descrição |
 | :--- | :--- |
 | `[caminho]` | Pasta alvo para limpar (se omitido, usa a pasta atual). |
+| `--sanitize-secrets` | (Padrão: Ativo) Detecta credenciais hardcodadas, migra para `.env` e blinda `.gitignore`. |
+| `--secrets-only` | Higieniza apenas credenciais e gera `.env`/`.env.example` (sem alterar comentários). |
+| `--no-secrets` | Desativa a varredura e sanitização de segredos. |
 | `--update` | Auto-atualiza a skill para a versão mais recente do GitHub. |
 | `--hook` | Instala o Git pre-commit hook automático no projeto alvo. |
 | `--all-rules` | Força a geração de regras para todas as IAs conhecidas (Cursor, Copilot, Claude, Codex, etc.). |
