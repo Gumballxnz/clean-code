@@ -82,7 +82,6 @@ function stripCommentsFromCStyle(content, ext) {
     const ch = content[i];
     const next = i + 1 < len ? content[i + 1] : '';
 
-    // Strings normais (aspas duplas)
     if (ch === '"') {
       let str = ch;
       i++;
@@ -104,7 +103,6 @@ function stripCommentsFromCStyle(content, ext) {
       continue;
     }
 
-    // Caracteres literais ou strings de aspas simples
     if (ch === '\'') {
       let str = ch;
       i++;
@@ -126,7 +124,6 @@ function stripCommentsFromCStyle(content, ext) {
       continue;
     }
 
-    // Raw strings em Go (crases `...`)
     if (ch === '`') {
       let str = ch;
       i++;
@@ -142,7 +139,6 @@ function stripCommentsFromCStyle(content, ext) {
       continue;
     }
 
-    // Comentário de bloco /* ... */
     if (ch === '/' && next === '*') {
       const startPos = i;
       i += 2;
@@ -159,7 +155,6 @@ function stripCommentsFromCStyle(content, ext) {
       continue;
     }
 
-    // Comentário de linha // ...
     if (ch === '/' && next === '/') {
       const startPos = i;
       i += 2;
@@ -182,7 +177,6 @@ function stripCommentsFromCStyle(content, ext) {
       continue;
     }
 
-    // PHP shebang ou comentário com #
     if (ext === '.php' && ch === '#' && !result.endsWith('$')) {
       i++;
       while (i < len && content[i] !== '\n') {
@@ -222,7 +216,6 @@ function stripCommentsFromShellOrPython(content) {
   while (i < len) {
     const ch = content[i];
 
-    // Multiline quotes (Python docstrings ou raw strings """ / ''')
     if ((ch === '"' || ch === '\'') && content.slice(i, i + 3) === ch.repeat(3)) {
       const quoteType = ch.repeat(3);
       result += quoteType;
@@ -243,7 +236,6 @@ function stripCommentsFromShellOrPython(content) {
       continue;
     }
 
-    // String simples com '
     if (ch === '\'') {
       result += ch;
       i++;
@@ -264,7 +256,6 @@ function stripCommentsFromShellOrPython(content) {
       continue;
     }
 
-    // String simples com "
     if (ch === '"') {
       result += ch;
       i++;
@@ -285,7 +276,6 @@ function stripCommentsFromShellOrPython(content) {
       continue;
     }
 
-    // Comentário #
     if (ch === '#') {
       i++;
       while (i < len && content[i] !== '\n') {
@@ -310,7 +300,6 @@ function stripCommentsFromHtmlAndTemplates(content, ext, ts) {
   let blockCommentsCount = 0;
   let lineCommentsCount = 0;
 
-  // 1. Limpa blocos <!-- ... --> (preserva condicionais <!--[if ...]> e licenças)
   let result = content.replace(/<!--[\s\S]*?-->/g, (match) => {
     if (match.startsWith('<!--[if') || match.includes('@license')) {
       return match;
@@ -319,7 +308,6 @@ function stripCommentsFromHtmlAndTemplates(content, ext, ts) {
     return '';
   });
 
-  // 2. Limpa tags <script> internas com parser JS se for Vue/Svelte/Astro/HTML
   result = result.replace(/(<script\b[^>]*>)([\s\S]*?)(<\/script>)/gi, (full, openTag, scriptBody, closeTag) => {
     if (ts) {
       const cleanedScript = stripCommentsWithAst(scriptBody, '.ts', ts);
@@ -332,7 +320,6 @@ function stripCommentsFromHtmlAndTemplates(content, ext, ts) {
     return full;
   });
 
-  // 3. Limpa tags <style> internas com parser CSS
   result = result.replace(/(<style\b[^>]*>)([\s\S]*?)(<\/style>)/gi, (full, openTag, styleBody, closeTag) => {
     const cleanedCss = stripCommentsFromCss(styleBody);
     blockCommentsCount += cleanedCss.blockCommentsCount;

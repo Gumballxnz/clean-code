@@ -44,7 +44,6 @@ function ensureFileWithDirective(filePath, content, appendHeader = 'Clean Code D
   }
 }
 
-// Registro extensível de IAs e IDEs
 const AI_PROVIDERS = [
   {
     id: 'antigravity',
@@ -205,14 +204,13 @@ function syncAiRules(targetDir, options = { allRules: false, env: process.env })
     targetProviders = AI_PROVIDERS;
   } else if (detectedProviders.length > 0) {
     targetProviders = detectedProviders;
-    // Sempre garante o padrão aberto Antigravity/AGENTS.md se não foi detectado nenhum
+
     if (!targetProviders.some(p => p.id === 'antigravity')) {
       const antigravityProvider = AI_PROVIDERS.find(p => p.id === 'antigravity');
       if (antigravityProvider) targetProviders.push(antigravityProvider);
     }
   } else {
-    // Modo padrão inteligente se não detectou nenhum indicador específico:
-    // Configura Antigravity / Gemini (GEMINI.md e AGENTS.md)
+
     const defaultProvider = AI_PROVIDERS.find(p => p.id === 'antigravity');
     if (defaultProvider) targetProviders.push(defaultProvider);
   }

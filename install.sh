@@ -31,7 +31,7 @@ else
         IS_REMOTE=true
         TEMP_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t 'clean-code-install')
         echo -e "\033[0;37mBaixando versao mais recente do repositorio $REPO_OWNER/$REPO_NAME...\033[0m"
-        
+
         ZIP_URL="https://github.com/$REPO_OWNER/$REPO_NAME/archive/refs/heads/main.tar.gz"
         curl -fsSL "$ZIP_URL" | tar -xz -C "$TEMP_DIR"
         SOURCE_DIR="$TEMP_DIR/clean-code-main"

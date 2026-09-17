@@ -14,7 +14,6 @@ const { generateAllAiRules } = require('../templates/MULTI_AI_RULES');
 
 console.log('--- Iniciando Testes Unitários de Clean Code v1.1.0 ---');
 
-// 1. Teste Shell/Python
 const pyCode = `#!/usr/bin/env python3\n# Comentário de cabeçalho\nurl = "http://example.com#anchor"\n# Outro comentário\nprint('Hello # world') # linha comentada\n`;
 const pyResult = stripCommentsFromShellOrPython(pyCode);
 assert.ok(pyResult.cleaned.startsWith('#!/usr/bin/env python3'), 'Shebang deve ser mantido');
@@ -24,14 +23,12 @@ assert.ok(!pyResult.cleaned.includes('Comentário de cabeçalho'), 'Comentário 
 assert.strictEqual(pyResult.lineCommentsCount, 3, 'Deve contar 3 comentários de linha');
 console.log('✓ 1. Teste Python/Shell passou!');
 
-// 2. Teste CSS
 const cssCode = `/* @license MIT */\n/* Comentário desnecessário */\nbody {\n  color: red; /* cor do texto */\n}\n`;
 const cssResult = stripCommentsFromCss(cssCode);
 assert.ok(cssResult.cleaned.includes('@license MIT'), 'Licença deve ser preservada');
 assert.ok(!cssResult.cleaned.includes('Comentário desnecessário'), 'Comentário normal deve ser removido');
 console.log('✓ 2. Teste CSS passou!');
 
-// 3. Teste JavaScript / TypeScript AST
 let ts = null;
 try {
   ts = require('typescript');
@@ -51,7 +48,6 @@ if (jsResult) {
   console.log('✓ 3. Teste JavaScript / TypeScript AST passou!');
 }
 
-// 4. Teste C-Style (Java, C#, Go, Rust, PHP, C++)
 const cstyleCode = `// @license MIT\n// Comentário de classe\npublic class App {\n  // Campo de texto\n  private String msg = "Texto com // barras e \\"aspas\\"";\n  /* Bloco de comentário */\n  public void run() {\n    System.out.println(msg); // print\n  }\n}\n`;
 const cstyleResult = stripCommentsFromCStyle(cstyleCode, '.java');
 assert.ok(cstyleResult.cleaned.includes('// @license MIT'), 'Licença deve ser preservada');
@@ -61,7 +57,6 @@ assert.ok(!cstyleResult.cleaned.includes('Bloco de comentário'), 'Comentário /
 assert.strictEqual(cstyleResult.blockCommentsCount, 1, '1 bloco removido');
 console.log('✓ 4. Teste C-Style (Java/C#/Go/Rust) passou!');
 
-// 5. Teste HTML / Templates (Vue, Svelte, HTML)
 const htmlCode = `<!DOCTYPE html>\n<!-- Comentário no HTML -->\n<!--[if IE]><p>IE</p><![endif]-->\n<div id="app">\n  <!-- Comentário do componente -->\n  <h1>Olá Mundo</h1>\n</div>\n`;
 const htmlResult = stripCommentsFromHtmlAndTemplates(htmlCode, '.html', ts);
 assert.ok(htmlResult.cleaned.includes('<!--[if IE]><p>IE</p><![endif]-->'), 'Condicional IE preservada');
@@ -69,7 +64,6 @@ assert.ok(!htmlResult.cleaned.includes('Comentário no HTML'), 'Comentário HTML
 assert.ok(!htmlResult.cleaned.includes('Comentário do componente'), 'Comentário do componente removido');
 console.log('✓ 5. Teste HTML / Templates passou!');
 
-// 6. Teste YAML / Config
 const yamlCode = `# Configuração geral\nserver:\n  port: 8080 # porta principal\n  url: "http://example.com#api" # endpoint\n`;
 const yamlResult = stripCommentsFromConfig(yamlCode, '.yaml');
 assert.ok(yamlResult.cleaned.includes('http://example.com#api'), 'URL com # dentro de aspas deve ser preservada');
@@ -77,7 +71,6 @@ assert.ok(!yamlResult.cleaned.includes('Configuração geral'), 'Comentário de 
 assert.ok(!yamlResult.cleaned.includes('porta principal'), 'Comentário inline YAML removido');
 console.log('✓ 6. Teste YAML / Config passou!');
 
-// 7. Teste Gerador Multi-IA e Codex
 const tempDir = path.join(__dirname, '..', 'temp_multi_ai_test');
 if (fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true, force: true });
 fs.mkdirSync(tempDir, { recursive: true });
@@ -95,7 +88,6 @@ assert.ok(fs.existsSync(path.join(tempDir, '.clinerules')), '.clinerules gerado'
 fs.rmSync(tempDir, { recursive: true, force: true });
 console.log('✓ 7. Teste Gerador Multi-IA (com Codex) passou!');
 
-// 8. Teste de Auto-Detecção de IA/IDE em Tempo de Execução
 const { detectActiveAiEnvironments } = require('../templates/MULTI_AI_RULES');
 const simulatedEnv = { CURSOR_VERSION: '0.42.0', ANTHROPIC_API_KEY: 'sk-ant-test' };
 const detected = detectActiveAiEnvironments(process.cwd(), simulatedEnv);
