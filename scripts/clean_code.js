@@ -342,7 +342,7 @@ function ensureAiDirectiveRule(targetDir, allRules = false) {
   }
 }
 
-function printDetailedReport(stats, options, durationMs, ruleResult) {
+function printDetailedReport(stats, options, durationMs, ruleResult, gitInfo = null) {
   console.log('\n================================================================');
   console.log('                 RELATÓRIO DETALHADO - CLEAN CODE               ');
   console.log('================================================================');

@@ -1,6 +1,6 @@
 {
   "name": "@gumballwotersan/clean-code",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Antigravity skill and CLI to strip unnecessary comments, redundant JSDocs, and enforce clean code across AI workflows.",
   "main": "scripts/clean_code.js",
   "bin": {
