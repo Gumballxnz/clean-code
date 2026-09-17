@@ -100,4 +100,6 @@ Write-Host " 2. Para atualizar a qualquer momento:" -ForegroundColor White
 Write-Host "    node `"$targetDir\scripts\clean_code.js`" --update" -ForegroundColor Cyan
 Write-Host " 3. Para ativar pre-commit hook automatico em qualquer projeto:" -ForegroundColor White
 Write-Host "    node `"$targetDir\scripts\clean_code.js`" --hook" -ForegroundColor Cyan
+Write-Host " 4. Ou instale como comando global no sistema via NPM:" -ForegroundColor White
+Write-Host "    npm install -g @gumballwotersan/clean-code" -ForegroundColor Cyan
 Write-Host "========================================================`n" -ForegroundColor Green

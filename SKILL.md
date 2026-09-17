@@ -13,11 +13,15 @@ Esta skill executa uma varredura completa, segura e automática para eliminar co
 Quando o usuário chamar `/clean-code` ou solicitar a limpeza:
 
 1. **Localizar e Executar o Script:**
-   - No Windows:
+   - Se instalado via NPM global (`npm i -g @gumballwotersan/clean-code`):
+     ```bash
+     clean-code "<caminho_do_projeto>"
+     ```
+   - No Windows (Skill Antigravity):
      ```bash
      node "$HOME\.gemini\config\skills\clean-code\scripts\clean_code.js" "<caminho_do_projeto>"
      ```
-   - No Linux / macOS:
+   - No Linux / macOS (Skill Antigravity):
      ```bash
      node "$HOME/.gemini/config/skills/clean-code/scripts/clean_code.js" "<caminho_do_projeto>"
      ```

@@ -47,14 +47,36 @@ O Clean Code reconhece o ambiente ativo (por variáveis de processo ou arquivos 
 
 ## ⚡ Instalação e Execução
 
-### 1. Execução Rápida via NPX (Sem Instalação Prévia)
-Se você tem Node.js instalado, pode rodar diretamente em qualquer pasta:
+### 1. 📦 Instalação Global via NPM (CLI)
+Instale uma única vez para ter o comando `clean-code` disponível em qualquer terminal do seu sistema:
+```bash
+npm install -g @gumballwotersan/clean-code
+```
+Após instalar, basta rodar em qualquer projeto:
+```bash
+clean-code
+```
+
+### 2. ⚡ Execução Rápida via NPX (Sem Instalação)
+Se preferir rodar diretamente sem instalar nada:
 ```bash
 npx @gumballwotersan/clean-code
 ```
 
-### 2. Instalação Permanente para Google Antigravity
-Para ter o comando `/clean-code` disponível nativamente no chat do Antigravity em qualquer computador:
+### 3. 🛠️ Como Dependência de Projeto
+Para incluir no seu projeto e rodar via scripts npm:
+```bash
+npm install -D @gumballwotersan/clean-code
+```
+E no seu `package.json`:
+```json
+"scripts": {
+  "clean": "clean-code"
+}
+```
+
+### 4. 🤖 Instalação Permanente para Google Antigravity
+Para ter a skill oficial `/clean-code` disponível nativamente no chat do Antigravity:
 
 #### 🪟 Windows (PowerShell)
 ```powershell
