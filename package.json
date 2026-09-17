@@ -23,9 +23,14 @@
     "hook": "node ./scripts/clean_code.js --hook",
     "all-rules": "node ./scripts/clean_code.js --all-rules",
     "release": "npm publish --access public",
+    "release:github": "node ./scripts/publish-github.js",
     "test": "node ./scripts/test.js && node ./scripts/test_integration.js",
     "install:global": "node ./install.js --global",
     "install:project": "node ./install.js --project"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Gumballxnz/clean-code.git"
   },
   "keywords": [
     "antigravity",
