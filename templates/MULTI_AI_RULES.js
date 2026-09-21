@@ -14,6 +14,7 @@ Write pure, self-documenting, production-ready code. Do NOT add unnecessary, red
 5. **Compact Line Spacing**: Avoid clusters of empty lines. Keep code readable with at most one empty line between logical blocks.
 6. **Zero Hardcoded Secrets & Credentials**: NEVER expose or hardcode API keys, secrets, access tokens, database URLs, Supabase keys, Firebase keys, Stripe keys, SSH private keys, or certificates in source code or public documentation. Always load secrets strictly from environment variables (\`.env\`, \`process.env.*\`, \`os.getenv\`, etc.). Always ensure \`.env\` and sensitive credential files are listed in \`.gitignore\`.
 7. **No Scratch Test Files in Commits**: Temporary test scripts, scratch files (e.g. \`test_*.js\`, \`teste_*.js\`, \`scratch.*\`, \`temp_*\`), mock data dumps, or ad-hoc verification scripts created during tasks must NEVER be left in project roots or committed to version control. Always clean them up or ensure they are listed in \`.gitignore\`.
+8. **Mandatory Skeleton Screens for Async Operations**: All processing, network requests, and visual loading states (charts, cards, tables, video players, analytics panels) MUST use responsive animated skeleton screens (shimmer/pulse) in both Light Mode and Dark Mode. Never show raw loading text ("Carregando...") or unstyled black empty boxes that compromise site responsiveness or visual cohesion.
 `;
 
 const MDC_FRONTMATTER = `---
@@ -82,8 +83,22 @@ function ensureFileWithDirective(filePath, content, appendHeader = 'Clean Code D
       if (!existing.includes(appendHeader)) {
         fs.appendFileSync(filePath, '\n\n' + content, 'utf8');
         return { status: 'updated', file: path.relative(process.cwd(), filePath) || path.basename(filePath), path: filePath };
+      } else if (existing.includes('Mandatory Skeleton Screens') && existing.includes('Zero Hardcoded Secrets')) {
+        return { status: 'already_present', file: path.relative(process.cwd(), filePath) || path.basename(filePath), path: filePath };
+      } else {
+        if (existing.trim().startsWith('# Clean Code Directives')) {
+          fs.writeFileSync(filePath, content, 'utf8');
+        } else {
+          const idx = existing.indexOf('# ' + appendHeader);
+          if (idx !== -1) {
+            const prefix = existing.slice(0, idx).trimEnd();
+            fs.writeFileSync(filePath, prefix + '\n\n' + content, 'utf8');
+          } else {
+            fs.writeFileSync(filePath, content, 'utf8');
+          }
+        }
+        return { status: 'updated', file: path.relative(process.cwd(), filePath) || path.basename(filePath), path: filePath };
       }
-      return { status: 'already_present', file: path.relative(process.cwd(), filePath) || path.basename(filePath), path: filePath };
     }
   } catch (err) {
     return { status: 'error', file: path.basename(filePath), error: err.message };

@@ -1,6 +1,6 @@
 {
   "name": "@gumballwotersan/clean-code",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Antigravity skill and CLI to strip unnecessary comments, sanitize hardcoded secrets (Supabase, Firebase, OpenAI, Stripe) into .env, and enforce clean code across AI workflows.",
   "main": "scripts/clean_code.js",
   "bin": {

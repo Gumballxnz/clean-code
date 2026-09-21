@@ -1,4 +1,4 @@
-# 🧹 Clean Code Skill & CLI (v1.3.0)
+# 🧹 Clean Code Skill & CLI (v1.3.1)
 
 > **Transforme seu código em código puro, funcional, seguro e validado.**  
 > Elimine anotações desnecessárias, comentários redundantes gerados por IA e **higienize credenciais expostas (Supabase, OpenAI, Firebase, Stripe)** movendo-as automaticamente para `.env` e blindando seu `.gitignore`.
@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Antigravity Skill](https://img.shields.io/badge/Antigravity-Skill-blue.svg)](https://github.com/Gumballxnz/clean-code)
 [![NPM Package](https://img.shields.io/badge/npm-%40gumballwotersan%2Fclean--code-red.svg)](https://www.npmjs.com/package/@gumballwotersan/clean-code)
-[![Version](https://img.shields.io/badge/version-1.3.0-brightgreen.svg)](https://github.com/Gumballxnz/clean-code/releases)
+[![Version](https://img.shields.io/badge/version-1.3.1-brightgreen.svg)](https://github.com/Gumballxnz/clean-code/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/Gumballxnz/clean-code/pulls)
 
 ---
