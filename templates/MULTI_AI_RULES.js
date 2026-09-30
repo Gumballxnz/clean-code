@@ -16,6 +16,7 @@ Write pure, self-documenting, production-ready code. Do NOT add unnecessary, red
 7. **No Scratch Test Files in Commits**: Temporary test scripts, scratch files (e.g. \`test_*.js\`, \`teste_*.js\`, \`scratch.*\`, \`temp_*\`), mock data dumps, or ad-hoc verification scripts created during tasks must NEVER be left in project roots or committed to version control. Always clean them up or ensure they are listed in \`.gitignore\`.
 8. **Mandatory Skeleton Screens for Async Operations**: All processing, network requests, and visual loading states (charts, cards, tables, video players, analytics panels) MUST use responsive animated skeleton screens (shimmer/pulse) in both Light Mode and Dark Mode. Never show raw loading text ("Carregando...") or unstyled black empty boxes that compromise site responsiveness or visual cohesion.
 9. **Zero Native Browser Dialogs**: NEVER use native browser dialogs (\`window.alert\`, \`window.confirm\`, \`window.prompt\`, or unqualified \`alert()\`, \`confirm()\`, \`prompt()\`). All user confirmations, alerts, messages, and inputs MUST use custom, styled, accessible modal dialogs or toast notifications consistent with the UI/UX design system (e.g. \`showConfirmDialog\`, \`showToast\`, custom input modals).
+10. **Zero Hardcoded Fallbacks for Secrets & Databases**: NEVER use hardcoded production URLs, database connections, API keys, or tokens as fallback values in code (e.g. \`process.env.DATABASE_URL || "https://..."\`, \`process.env.FIREBASE_URL ?? "https://...firebaseio.com"\`). Hardcoded fallbacks silently compromise live databases when running in test, staging, AWS/cloud instances, or open-source forks. All credentials must come strictly from environment variables without hardcoded fallbacks.
 `;
 
 const MDC_FRONTMATTER = `---
@@ -84,7 +85,7 @@ function ensureFileWithDirective(filePath, content, appendHeader = 'Clean Code D
       if (!existing.includes(appendHeader)) {
         fs.appendFileSync(filePath, '\n\n' + content, 'utf8');
         return { status: 'updated', file: path.relative(process.cwd(), filePath) || path.basename(filePath), path: filePath };
-      } else if (existing.includes('Zero Native Browser Dialogs') && existing.includes('Mandatory Skeleton Screens') && existing.includes('Zero Hardcoded Secrets')) {
+      } else if (existing.includes('Zero Hardcoded Fallbacks') && existing.includes('Zero Native Browser Dialogs') && existing.includes('Mandatory Skeleton Screens') && existing.includes('Zero Hardcoded Secrets')) {
         return { status: 'already_present', file: path.relative(process.cwd(), filePath) || path.basename(filePath), path: filePath };
       } else {
         if (existing.trim().startsWith('# Clean Code Directives')) {

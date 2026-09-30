@@ -14,6 +14,12 @@ const FALSE_POSITIVES = new Set([
   ['pk_test', 'x'.repeat(24)].join('_'),
   ['sk_test', 'x'.repeat(24)].join('_'),
   ['akiaiosfodnn7', 'example'].join(''),
+  'https://your-project.supabase.co',
+  'https://your-project-default-rtdb.firebaseio.com',
+  'https://your-project.firebaseio.com',
+  'your-project.appspot.com',
+  'your-project.firebaseapp.com',
+  'https://your-project.firebaseapp.com',
   'dummy',
   'undefined',
   'null',
@@ -59,6 +65,27 @@ const SECRET_RULES = [
     placeholder: 'AIzaSyYourFirebaseApiKeyHere'
   },
   {
+    id: 'FIREBASE_DATABASE_URL',
+    name: 'Firebase Realtime Database URL',
+    pattern: /https:\/\/[a-z0-9_-]+(?:-default-rtdb)?\.firebaseio\.com\/?|https:\/\/[a-z0-9_-]+-rtdb\.[a-z0-9_-]+\.firebasedatabase\.app\/?/g,
+    varPrefix: 'FIREBASE_DATABASE_URL',
+    placeholder: 'https://your-project-default-rtdb.firebaseio.com'
+  },
+  {
+    id: 'FIREBASE_STORAGE_BUCKET',
+    name: 'Firebase Storage Bucket',
+    pattern: /(?:https?:\/\/|gs:\/\/)[a-z0-9_.-]+\.appspot\.com\/?|[a-z0-9_-]{3,50}\.appspot\.com/g,
+    varPrefix: 'FIREBASE_STORAGE_BUCKET',
+    placeholder: 'your-project.appspot.com'
+  },
+  {
+    id: 'FIREBASE_AUTH_DOMAIN',
+    name: 'Firebase Auth Domain',
+    pattern: /https?:\/\/[a-z0-9_-]+\.firebaseapp\.com\/?|[a-z0-9_-]{3,50}\.firebaseapp\.com/g,
+    varPrefix: 'FIREBASE_AUTH_DOMAIN',
+    placeholder: 'https://your-project.firebaseapp.com'
+  },
+  {
     id: 'STRIPE_SECRET_KEY',
     name: 'Stripe Secret Key',
     pattern: /(?:sk|rk)_(?:live|test)_[0-9a-zA-Z]{24,}/g,
@@ -99,6 +126,7 @@ function isFalsePositive(value) {
   if (!value || typeof value !== 'string') return true;
   const lower = value.toLowerCase();
   if (FALSE_POSITIVES.has(lower)) return true;
+  if (lower.includes('your-project') || lower.includes('example.com') || lower.includes('placeholder')) return true;
   if (/^(?:x{10,}|test|dummy|placeholder)$/i.test(value)) return true;
   return false;
 }
@@ -347,6 +375,10 @@ function ensureGitIgnoreHasEnv(targetDir, dryRun = false) {
   return res.updated;
 }
 
+function escapeRegExp(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function updateEnvFiles(targetDir, extractedSecrets, dryRun = false) {
   const envPath = path.join(targetDir, '.env');
   const envExamplePath = path.join(targetDir, '.env.example');
@@ -368,12 +400,72 @@ function updateEnvFiles(targetDir, extractedSecrets, dryRun = false) {
     }
   }
 
+  let sanitizedExampleCount = 0;
+  let exampleLinesToSave = null;
+
+  if (fs.existsSync(envExamplePath)) {
+    try {
+      const exampleRaw = fs.readFileSync(envExamplePath, 'utf8');
+      const lines = exampleRaw.split(/\r?\n/);
+      let changed = false;
+
+      const newLines = lines.map(line => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) return line;
+        const eqIdx = line.indexOf('=');
+        if (eqIdx === -1) return line;
+
+        const k = line.slice(0, eqIdx).trim();
+        let v = line.slice(eqIdx + 1).trim();
+        let quote = '';
+        if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+          quote = v[0];
+          v = v.slice(1, -1);
+        }
+
+        for (const item of extractedSecrets) {
+          if (v === item.secret) {
+            sanitizedExampleCount++;
+            changed = true;
+            const ph = item.placeholder || `your_${item.varName.toLowerCase()}_here`;
+            return `${k}=${quote || '"'}${ph}${quote || '"'}`;
+          }
+        }
+
+        for (const rule of SECRET_RULES) {
+          rule.pattern.lastIndex = 0;
+          if (rule.pattern.test(v) && !isFalsePositive(v)) {
+            sanitizedExampleCount++;
+            changed = true;
+            return `${k}=${quote || '"'}${rule.placeholder}${quote || '"'}`;
+          }
+        }
+
+        return line;
+      });
+
+      if (changed) {
+        exampleLinesToSave = newLines;
+      }
+    } catch (_) {}
+  }
+
   if (!dryRun) {
     if (newEnvEntries.length > 0) {
       const prefix = fs.existsSync(envPath) && !fs.readFileSync(envPath, 'utf8').endsWith('\n') ? '\n' : '';
       fs.appendFileSync(envPath, prefix + newEnvEntries.join('\n') + '\n', 'utf8');
     }
-    if (newExampleEntries.length > 0) {
+
+    if (exampleLinesToSave) {
+      fs.writeFileSync(envExamplePath, exampleLinesToSave.join('\n'), 'utf8');
+    }
+
+    if (!fs.existsSync(envExamplePath)) {
+      const exampleContent = Array.from(existingExample.entries())
+        .map(([k, v]) => `${k}="${v || 'your_' + k.toLowerCase() + '_here'}"`)
+        .join('\n') + '\n';
+      fs.writeFileSync(envExamplePath, exampleContent, 'utf8');
+    } else if (newExampleEntries.length > 0) {
       const prefix = fs.existsSync(envExamplePath) && !fs.readFileSync(envExamplePath, 'utf8').endsWith('\n') ? '\n' : '';
       fs.appendFileSync(envExamplePath, prefix + newExampleEntries.join('\n') + '\n', 'utf8');
     }
@@ -381,7 +473,8 @@ function updateEnvFiles(targetDir, extractedSecrets, dryRun = false) {
 
   return {
     addedToEnv: newEnvEntries.length,
-    addedToExample: newExampleEntries.length
+    addedToExample: newExampleEntries.length,
+    sanitizedExampleCount
   };
 }
 
@@ -474,6 +567,31 @@ function scanAndSanitizeSecretsInContent(content, filePath, targetDir, secretReg
   }
 
   for (const det of fileDetections) {
+    const escaped = escapeRegExp(det.secret);
+
+    // 1. Detect and strip hardcoded fallbacks to secrets (Node/JS/TS/Vite/Next):
+    // e.g. process.env.VAR || "https://..." or process.env.VAR ?? "https://..."
+    const jsFallbackRegex = new RegExp(
+      `((?:process\\.env\\.[a-zA-Z0-9_]+|import\\.meta\\.env\\.[a-zA-Z0-9_]+))\\s*(?:\\|\\||\\?\\?)\\s*["'\`]${escaped}["'\`]`,
+      'g'
+    );
+    modifiedContent = modifiedContent.replace(jsFallbackRegex, '$1');
+
+    // 2. Python fallback: os.getenv("VAR") or "secret"
+    const pyFallbackRegex = new RegExp(
+      `((?:os\\.getenv\\(["'][a-zA-Z0-9_]+["']\\)))\\s*(?:or)\\s*["'\`]${escaped}["'\`]`,
+      'g'
+    );
+    modifiedContent = modifiedContent.replace(pyFallbackRegex, '$1');
+
+    // 3. PHP fallback: getenv('VAR') ?: "secret" or getenv('VAR') || "secret"
+    const phpFallbackRegex = new RegExp(
+      `((?:getenv\\(["'][a-zA-Z0-9_]+["']\\)))\\s*(?:\\?:|\\|\\|)\\s*["'\`]${escaped}["'\`]`,
+      'g'
+    );
+    modifiedContent = modifiedContent.replace(phpFallbackRegex, '$1');
+
+    // 4. Standard replacement if still present
     const doubleQuoted = `"${det.secret}"`;
     const singleQuoted = `'${det.secret}'`;
     const backticked = `\`${det.secret}\``;
@@ -488,6 +606,11 @@ function scanAndSanitizeSecretsInContent(content, filePath, targetDir, secretReg
       modifiedContent = modifiedContent.split(det.secret).join(det.expr);
     }
   }
+
+  // Clean any duplicated fallback artifacts e.g. process.env.VAR || process.env.VAR
+  modifiedContent = modifiedContent.replace(/\b(process\.env\.[a-zA-Z0-9_]+)\s*(?:\|\||\?\?)\s*\1\b/g, '$1');
+  modifiedContent = modifiedContent.replace(/\b(import\.meta\.env\.[a-zA-Z0-9_]+)\s*(?:\|\||\?\?)\s*\1\b/g, '$1');
+  modifiedContent = modifiedContent.replace(/\b(os\.getenv\([^)]+\))\s*or\s*\1\b/g, '$1');
 
   return {
     hasChanges: modifiedContent !== content,

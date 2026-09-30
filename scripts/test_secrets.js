@@ -199,4 +199,61 @@ ${openaiMock}
   console.log('✓ Automatic migration of root files to .agents/ and secret directive passed');
 }
 
+{
+  const input = `
+const firebaseConfig = {
+  apiKey: "AIzaSyD-1234567890abcdef1234567890abc",
+  authDomain: "ussd-bot-vodacom.firebaseapp.com",
+  databaseURL: process.env.FIREBASE_DATABASE_URL || "https://ussd-bot-vodacom-default-rtdb.firebaseio.com",
+  storageBucket: "ussd-bot-vodacom.appspot.com"
+};
+`;
+  const registry = new Map();
+  const res = scanAndSanitizeSecretsInContent(input, 'firebaseConfig.js', process.cwd(), registry, { hasVite: false, hasNext: false });
+
+  assert.strictEqual(res.hasChanges, true);
+  assert.ok(res.modifiedContent.includes('databaseURL: process.env.FIREBASE_DATABASE_URL'));
+  assert.ok(!res.modifiedContent.includes('||'));
+  assert.ok(!res.modifiedContent.includes('https://ussd-bot-vodacom-default-rtdb.firebaseio.com'));
+  assert.ok(res.modifiedContent.includes('apiKey: process.env.FIREBASE_API_KEY'));
+  assert.ok(res.modifiedContent.includes('authDomain: process.env.FIREBASE_AUTH_DOMAIN'));
+  assert.ok(res.modifiedContent.includes('storageBucket: process.env.FIREBASE_STORAGE_BUCKET'));
+  console.log('✓ Firebase RTDB URL, Auth Domain, Storage Bucket & Fallback elimination passed');
+}
+
+{
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'clean-code-env-example-test-'));
+  const leakedExample = `
+# Environment variables
+PORT=3000
+FIREBASE_DATABASE_URL="https://ussd-bot-vodacom-default-rtdb.firebaseio.com"
+SUPABASE_URL=https://abcdefghijklmnopqr12.supabase.co
+`;
+  fs.writeFileSync(path.join(tempDir, '.env.example'), leakedExample, 'utf8');
+
+  const updateResult = updateEnvFiles(tempDir, [], false);
+  assert.strictEqual(updateResult.sanitizedExampleCount, 2);
+
+  const cleanedExample = fs.readFileSync(path.join(tempDir, '.env.example'), 'utf8');
+  assert.ok(!cleanedExample.includes('ussd-bot-vodacom'));
+  assert.ok(!cleanedExample.includes('https://abcdefghijklmnopqr12.supabase.co'));
+  assert.ok(cleanedExample.includes('https://your-project-default-rtdb.firebaseio.com'));
+  assert.ok(cleanedExample.includes('https://your-project.supabase.co'));
+
+  fs.rmSync(tempDir, { recursive: true, force: true });
+  console.log('✓ Leaked secrets inside existing .env.example deep sanitization passed');
+}
+
+{
+  const { syncAiRules } = require('../templates/MULTI_AI_RULES');
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'clean-code-rule10-test-'));
+  syncAiRules(tempDir, { allRules: false });
+  const content = fs.readFileSync(path.join(tempDir, '.agents', 'GEMINI.md'), 'utf8');
+  assert.ok(content.includes('Zero Hardcoded Fallbacks for Secrets & Databases'));
+  assert.ok(content.includes('Zero Native Browser Dialogs'));
+  fs.rmSync(tempDir, { recursive: true, force: true });
+  console.log('✓ Zero Hardcoded Fallbacks & Zero Native Browser Dialogs rules presence passed');
+}
+
 console.log('\nAll Secret Scanner & Sanitizer tests passed!\n');
+

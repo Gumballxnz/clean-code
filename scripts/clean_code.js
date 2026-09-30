@@ -468,13 +468,16 @@ function printDetailedReport(stats, options, durationMs, ruleResult, gitInfo = n
     console.log(`\n • Proteção no .gitignore aplicada para: ${gitIgnoreSafetyResult.added.join(', ')}`);
   }
 
-  if (stats.secretsSanitized > 0 || (envSyncResult && (envSyncResult.addedToEnv > 0 || envSyncResult.addedToExample > 0))) {
+  if (stats.secretsSanitized > 0 || (envSyncResult && (envSyncResult.addedToEnv > 0 || envSyncResult.addedToExample > 0 || envSyncResult.sanitizedExampleCount > 0))) {
     console.log('\n----------------------------------------------------------------');
     console.log('SEGURANÇA: CREDENCIAIS SANITIZADAS & MIGRADAS PARA O .ENV:');
     console.log(` • Credenciais isoladas no código:    ${stats.secretsSanitized}`);
     if (envSyncResult) {
       console.log(` • Variáveis adicionadas ao .env:      ${envSyncResult.addedToEnv}`);
       console.log(` • Placeholders no .env.example:       ${envSyncResult.addedToExample}`);
+      if (envSyncResult.sanitizedExampleCount > 0) {
+        console.log(` • Segredos limpos no .env.example:    ${envSyncResult.sanitizedExampleCount} (URLs reais substituídas por placeholders)`);
+      }
       console.log(` • Blindagem ativa no .gitignore:      SIM (.env protegido contra commits)`);
     }
     if (stats.sanitizedSecretsList.length > 0) {
@@ -614,8 +617,17 @@ function main() {
   }
 
   let envSyncResult = null;
-  if (options.sanitizeSecrets && secretRegistry.size > 0) {
+  if (options.sanitizeSecrets) {
     envSyncResult = updateEnvFiles(options.targetDir, Array.from(secretRegistry.values()), options.dryRun);
+    if (envSyncResult && envSyncResult.sanitizedExampleCount > 0) {
+      stats.secretsSanitized += envSyncResult.sanitizedExampleCount;
+      stats.sanitizedSecretsList.push({
+        file: '.env.example',
+        ruleName: 'Sanitização de Segredos Vazados no .env.example',
+        varName: `${envSyncResult.sanitizedExampleCount} credenciais/URLs`,
+        expr: 'Placeholders Seguros'
+      });
+    }
   }
 
   let ruleResult = null;
